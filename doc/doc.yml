@@ -1,0 +1,3 @@
+pip install cupy-cuda112
+python -m cupyx.tools.install_library --library nccl --cuda 11.2
+python -m cupyx.tools.install_library --cuda 11.2 --library cutensor
