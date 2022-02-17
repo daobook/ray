@@ -40,7 +40,7 @@ def upload_working_dir_if_needed(
             raise ValueError("Only .zip files supported for remote URIs.")
         return runtime_env
 
-    excludes = runtime_env.get("excludes", None)
+    excludes = runtime_env.get("excludes")
     working_dir_uri = get_uri_for_directory(working_dir, excludes=excludes)
     upload_package_if_needed(
         working_dir_uri,

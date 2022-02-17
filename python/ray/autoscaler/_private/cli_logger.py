@@ -45,10 +45,7 @@ class _ColorfulMock:
         yield IdentityClass()
 
     def __getattr__(self, name):
-        if name == "with_style":
-            return self.with_style
-
-        return self.identity
+        return self.with_style if name == "with_style" else self.identity
 
 
 try:
@@ -208,7 +205,7 @@ def _format_msg(msg: str,
         The formatted message.
     """
 
-    if isinstance(msg, str) or isinstance(msg, ColorfulString):
+    if isinstance(msg, (str, ColorfulString)):
         tags_str = ""
         if _tags is not None:
             tags_list = []
@@ -219,7 +216,7 @@ def _format_msg(msg: str,
                 if v is False:
                     continue
 
-                tags_list += [k + "=" + v]
+                tags_list += [f'{k}={v}']
             if tags_list:
                 tags_str = cf.reset(
                     cf.dimmed(" [{}]".format(", ".join(tags_list))))
@@ -387,7 +384,7 @@ class _CliLogger():
             # colorful autodetects tty settings
             return
 
-        raise ValueError("Invalid log color setting: " + self.color_mode)
+        raise ValueError(f'Invalid log color setting: {self.color_mode}')
 
     def newline(self):
         """Print a line feed.
@@ -432,7 +429,7 @@ class _CliLogger():
 
         # We aren't using standard python logging convention, so we hardcode
         # the log levels for now.
-        if _level_str in ["WARNING", "ERROR", "PANIC"]:
+        if _level_str in {"WARNING", "ERROR", "PANIC"}:
             stream = sys.stderr
         else:
             stream = sys.stdout
@@ -497,8 +494,8 @@ class _CliLogger():
         For other arguments, see `_format_msg`.
         """
         self._print(
-            cf.skyBlue(key) + ": " +
-            _format_msg(cf.bold(msg), *args, **kwargs))
+            (f'{cf.skyBlue(key)}: ' + _format_msg(cf.bold(msg), *args, **kwargs))
+        )
 
     def verbose(self, msg: str, *args: Any, **kwargs: Any):
         """Prints a message if verbosity is not 0.
@@ -602,10 +599,7 @@ class _CliLogger():
         if exc is not None:
             raise exc
 
-        exc_cls = click.ClickException
-        if self.pretty:
-            exc_cls = SilentClickException
-
+        exc_cls = SilentClickException if self.pretty else click.ClickException
         if msg is None:
             msg = "Exiting due to cli_logger.abort()"
         raise exc_cls(msg)
@@ -619,10 +613,7 @@ class _CliLogger():
         For other arguments, see `_format_msg`.
         """
         if not val:
-            exc = None
-            if not self.pretty:
-                exc = AssertionError()
-
+            exc = AssertionError() if not self.pretty else None
             # TODO(maximsmol): rework asserts so that we get the expression
             #                  that triggered the assert
             #                  to do this, install a global try-catch
@@ -664,12 +655,8 @@ class _CliLogger():
                        "When running non-interactively, supply --yes to skip.")
             raise ValueError("Non-interactive confirm without --yes.")
 
-        if default:
-            yn_str = "Y/n"
-        else:
-            yn_str = "y/N"
-
-        confirm_str = cf.underlined("Confirm [" + yn_str + "]:") + " "
+        yn_str = "Y/n" if default else "y/N"
+        confirm_str = cf.underlined(f'Confirm [{yn_str}]:') + " "
 
         rendered_message = _format_msg(msg, *args, **kwargs)
         # the rendered message ends with ascii coding
@@ -680,8 +667,7 @@ class _CliLogger():
         complete_str = rendered_message + confirm_str
 
         if yes:
-            self._print(complete_str + "y " +
-                        cf.dimmed("[automatic, due to --yes]"))
+            self._print((f'{complete_str}y ' + cf.dimmed("[automatic, due to --yes]")))
             return True
 
         self._print(complete_str, _linefeed=False)

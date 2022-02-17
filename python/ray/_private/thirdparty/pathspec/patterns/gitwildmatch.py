@@ -49,20 +49,15 @@ class GitWildMatchPattern(RegexPattern):
 
 		pattern = pattern.strip()
 
-		if pattern.startswith('#'):
+		if (pattern.startswith('#') or not pattern.startswith('#') and pattern == '/'
+		    or not pattern.startswith('#') and pattern != '/' and not pattern):
 			# A pattern starting with a hash ('#') serves as a comment
 			# (neither includes nor excludes files). Escape the hash with a
 			# back-slash to match a literal hash (i.e., '\#').
 			regex = None
 			include = None
 
-		elif pattern == '/':
-			# EDGE CASE: According to `git check-ignore` (v2.4.1), a single
-			# '/' does not match any file.
-			regex = None
-			include = None
-
-		elif pattern:
+		else:
 
 			if pattern.startswith('!'):
 				# A pattern starting with an exclamation mark ('!') negates the
@@ -101,13 +96,6 @@ class GitWildMatchPattern(RegexPattern):
 				# trailing slash (e.g. dir/).
 				if pattern_segs[0] != '**':
 					pattern_segs.insert(0, '**')
-
-			else:
-				# EDGE CASE: A pattern without a beginning slash ('/') but
-				# contains at least one prepended directory (e.g.
-				# "dir/{pattern}") should not match "**/dir/{pattern}",
-				# according to `git check-ignore` (v2.4.1).
-				pass
 
 			if not pattern_segs[-1] and len(pattern_segs) > 1:
 				# A pattern ending with a slash ('/') will match all descendant
@@ -151,7 +139,7 @@ class GitWildMatchPattern(RegexPattern):
 					if need_slash:
 						output.append('/')
 					output.append(cls._translate_segment_glob(seg))
-					if i == end and include is True:
+					if i == end and include:
 						# A pattern ending without a slash ('/') will match a file
 						# or a directory (with paths underneath it). E.g., "foo"
 						# matches "foo", "foo/bar", "foo/bar/baz", etc.
@@ -161,12 +149,6 @@ class GitWildMatchPattern(RegexPattern):
 					need_slash = True
 			output.append('$')
 			regex = ''.join(output)
-
-		else:
-			# A blank pattern is a null-operation (neither includes nor
-			# excludes files).
-			regex = None
-			include = None
 
 		if regex is not None and return_type is bytes:
 			regex = regex.encode(_BYTES_ENCODING)
@@ -292,7 +274,7 @@ class GitWildMatchPattern(RegexPattern):
 		# Reference: https://git-scm.com/docs/gitignore#_pattern_format
 		meta_characters = r"[]!*#?"
 
-		return "".join("\\" + x if x in meta_characters else x for x in s)
+		return "".join(f'\\{x}' if x in meta_characters else x for x in s)
 
 util.register_pattern('gitwildmatch', GitWildMatchPattern)
 

@@ -55,8 +55,6 @@ def test_successful_job_status(ray_start_with_dashboard, disable_aiohttp_cache,
                     "PENDING", "RUNNING", "SUCCEEDED"
                 }
                 return job_entry["status"] == "SUCCEEDED"
-                assert job_entry["statusMessage"] is not None
-
         return False
 
     wait_for_condition(wait_for_job_to_succeed, timeout=30)

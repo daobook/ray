@@ -510,21 +510,14 @@ class StandardAutoscaler:
                 status_item.node_id
                 for status_item in response.drain_node_status
             }
-            failed_to_drain = raylet_ids_to_drain - drained_raylet_ids
-            if failed_to_drain:
+            if failed_to_drain := raylet_ids_to_drain - drained_raylet_ids:
                 self.prom_metrics.drain_node_exceptions.inc()
                 logger.error(
                     f"Failed to drain {len(failed_to_drain)} raylet(s).")
 
-        # If we get a gRPC error with an UNIMPLEMENTED code, fail silently.
-        # This error indicates that the GCS is using Ray version < 1.8.0,
-        # for which DrainNode is not implemented.
         except grpc.RpcError as e:
             # If the code is UNIMPLEMENTED, pass.
-            if e.code() == grpc.StatusCode.UNIMPLEMENTED:
-                pass
-            # Otherwise, it's a plane old gRPC error and we should log it.
-            else:
+            if e.code() != grpc.StatusCode.UNIMPLEMENTED:
                 self.prom_metrics.drain_node_exceptions.inc()
                 logger.exception(
                     "Failed to drain Ray nodes. Traceback follows.")
@@ -568,60 +561,63 @@ class StandardAutoscaler:
     def process_completed_updates(self):
         """Clean up completed NodeUpdaterThreads.
         """
-        completed_nodes = []
-        for node_id, updater in self.updaters.items():
-            if not updater.is_alive():
-                completed_nodes.append(node_id)
-        if completed_nodes:
-            failed_nodes = []
-            for node_id in completed_nodes:
-                updater = self.updaters[node_id]
-                if updater.exitcode == 0:
-                    self.num_successful_updates[node_id] += 1
-                    self.prom_metrics.successful_updates.inc()
-                    if updater.for_recovery:
-                        self.prom_metrics.successful_recoveries.inc()
-                    if updater.update_time:
-                        self.prom_metrics.worker_update_time.observe(
-                            updater.update_time)
-                    # Mark the node as active to prevent the node recovery
-                    # logic immediately trying to restart Ray on the new node.
-                    self.load_metrics.mark_active(
-                        self.provider.internal_ip(node_id))
+        if not (
+            completed_nodes := [
+                node_id
+                for node_id, updater in self.updaters.items()
+                if not updater.is_alive()
+            ]
+        ):
+            return
+        failed_nodes = []
+        for node_id in completed_nodes:
+            updater = self.updaters[node_id]
+            if updater.exitcode == 0:
+                self.num_successful_updates[node_id] += 1
+                self.prom_metrics.successful_updates.inc()
+                if updater.for_recovery:
+                    self.prom_metrics.successful_recoveries.inc()
+                if updater.update_time:
+                    self.prom_metrics.worker_update_time.observe(
+                        updater.update_time)
+                # Mark the node as active to prevent the node recovery
+                # logic immediately trying to restart Ray on the new node.
+                self.load_metrics.mark_active(
+                    self.provider.internal_ip(node_id))
+            else:
+                failed_nodes.append(node_id)
+                self.num_failed_updates[node_id] += 1
+                self.prom_metrics.failed_updates.inc()
+                if updater.for_recovery:
+                    self.prom_metrics.failed_recoveries.inc()
+                self.node_tracker.untrack(node_id)
+            del self.updaters[node_id]
+
+        if failed_nodes:
+            # Some nodes in failed_nodes may already have been terminated
+            # during an update (for being idle after missing a heartbeat).
+
+            # Update the list of non-terminated workers.
+            for node_id in failed_nodes:
+                # Check if the node has already been terminated.
+                if node_id in self.non_terminated_nodes.worker_ids:
+                    self.schedule_node_termination(
+                        node_id, "launch failed", logger.error)
                 else:
-                    failed_nodes.append(node_id)
-                    self.num_failed_updates[node_id] += 1
-                    self.prom_metrics.failed_updates.inc()
-                    if updater.for_recovery:
-                        self.prom_metrics.failed_recoveries.inc()
-                    self.node_tracker.untrack(node_id)
-                del self.updaters[node_id]
-
-            if failed_nodes:
-                # Some nodes in failed_nodes may already have been terminated
-                # during an update (for being idle after missing a heartbeat).
-
-                # Update the list of non-terminated workers.
-                for node_id in failed_nodes:
-                    # Check if the node has already been terminated.
-                    if node_id in self.non_terminated_nodes.worker_ids:
-                        self.schedule_node_termination(
-                            node_id, "launch failed", logger.error)
-                    else:
-                        logger.warning(f"StandardAutoscaler: {node_id}:"
-                                       " Failed to update node."
-                                       " Node has already been terminated.")
-                self.terminate_scheduled_nodes()
+                    logger.warning(f"StandardAutoscaler: {node_id}:"
+                                   " Failed to update node."
+                                   " Node has already been terminated.")
+            self.terminate_scheduled_nodes()
 
     def set_prometheus_updater_data(self):
         """Record total number of active NodeUpdaterThreads and how many of
         these are being run to recover nodes.
         """
         self.prom_metrics.updating_nodes.set(len(self.updaters))
-        num_recovering = 0
-        for updater in self.updaters.values():
-            if updater.for_recovery:
-                num_recovering += 1
+        num_recovering = sum(
+            1 for updater in self.updaters.values() if updater.for_recovery
+        )
+
         self.prom_metrics.recovering_nodes.set(num_recovering)
 
     def _report_pending_infeasible(self, unfulfilled: List[ResourceDict]):
@@ -637,25 +633,24 @@ class StandardAutoscaler:
         pending = []
         infeasible = []
         for bundle in unfulfilled:
-            placement_group = any(
-                "_group_" in k or k == "bundle" for k in bundle)
-            if placement_group:
+            if placement_group := any(
+                "_group_" in k or k == "bundle" for k in bundle
+            ):
                 continue
             if self.resource_demand_scheduler.is_feasible(bundle):
                 pending.append(bundle)
             else:
                 infeasible.append(bundle)
-        if pending:
-            if self.load_metrics.cluster_full_of_actors_detected:
-                for request in pending:
-                    self.event_summarizer.add_once_per_interval(
-                        "Warning: The following resource request cannot be "
-                        "scheduled right now: {}. This is likely due to all "
-                        "cluster resources being claimed by actors. Consider "
-                        "creating fewer actors or adding more nodes "
-                        "to this Ray cluster.".format(request),
-                        key="pending_{}".format(sorted(request.items())),
-                        interval_s=30)
+        if pending and self.load_metrics.cluster_full_of_actors_detected:
+            for request in pending:
+                self.event_summarizer.add_once_per_interval(
+                    "Warning: The following resource request cannot be "
+                    "scheduled right now: {}. This is likely due to all "
+                    "cluster resources being claimed by actors. Consider "
+                    "creating fewer actors or adding more nodes "
+                    "to this Ray cluster.".format(request),
+                    key="pending_{}".format(sorted(request.items())),
+                    interval_s=30)
         if infeasible:
             for request in infeasible:
                 self.event_summarizer.add_once_per_interval(
@@ -745,13 +740,10 @@ class StandardAutoscaler:
         # Remove the first entry (the head node).
         used_resource_requests.pop(0)
         for i, node_id in enumerate(resource_demand_vector_worker_node_ids):
-            if used_resource_requests[i] == max_node_resources[i] \
-                    and max_node_resources[i]:
-                # No resources of the node were needed for request_resources().
-                # max_node_resources[i] is an empty dict for legacy yamls
-                # before the node is connected.
-                pass
-            else:
+            if (
+                used_resource_requests[i] != max_node_resources[i]
+                or not max_node_resources[i]
+            ):
                 nodes_not_allowed_to_terminate.add(node_id)
         return frozenset(nodes_not_allowed_to_terminate)
 
@@ -966,7 +958,7 @@ class StandardAutoscaler:
             node_status = self.provider.node_tags(node_id)[TAG_RAY_NODE_STATUS]
             # We're not responsible for taking down
             # nodes with pending or failed status:
-            if not node_status == STATUS_UP_TO_DATE:
+            if node_status != STATUS_UP_TO_DATE:
                 continue
             # This node is up-to-date. If it hasn't had the chance to produce
             # a heartbeat, fake the heartbeat now (see logic for completed node
@@ -1177,10 +1169,14 @@ class StandardAutoscaler:
             ip = self.provider.internal_ip(node_id)
             node_tags = self.provider.node_tags(node_id)
 
-            if not all(
-                    tag in node_tags
-                    for tag in (TAG_RAY_NODE_KIND, TAG_RAY_USER_NODE_TYPE,
-                                TAG_RAY_NODE_STATUS)):
+            if any(
+                tag not in node_tags
+                for tag in (
+                    TAG_RAY_NODE_KIND,
+                    TAG_RAY_USER_NODE_TYPE,
+                    TAG_RAY_NODE_STATUS,
+                )
+            ):
                 # In some node providers, creation of a node and tags is not
                 # atomic, so just skip it.
                 continue
@@ -1189,17 +1185,13 @@ class StandardAutoscaler:
                 continue
             node_type = node_tags[TAG_RAY_USER_NODE_TYPE]
 
-            # TODO (Alex): If a node's raylet has died, it shouldn't be marked
-            # as active.
-            is_active = self.load_metrics.is_active(ip)
-            if is_active:
+            if is_active := self.load_metrics.is_active(ip):
                 active_nodes[node_type] += 1
                 non_failed.add(node_id)
             else:
                 status = node_tags[TAG_RAY_NODE_STATUS]
                 completed_states = [STATUS_UP_TO_DATE, STATUS_UPDATE_FAILED]
-                is_pending = status not in completed_states
-                if is_pending:
+                if is_pending := status not in completed_states:
                     pending_nodes.append((ip, node_type, status))
                     non_failed.add(node_id)
 
@@ -1207,10 +1199,11 @@ class StandardAutoscaler:
 
         # The concurrent counter leaves some 0 counts in, so we need to
         # manually filter those out.
-        pending_launches = {}
-        for node_type, count in self.pending_launches.breakdown().items():
-            if count:
-                pending_launches[node_type] = count
+        pending_launches = {
+            node_type: count
+            for node_type, count in self.pending_launches.breakdown().items()
+            if count
+        }
 
         return AutoscalerSummary(
             # Convert active_nodes from counter to dict for later serialization

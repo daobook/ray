@@ -5,10 +5,7 @@ import ray._private.test_utils as test_utils
 import time
 import tqdm
 
-if "SMOKE_TEST" in os.environ:
-    MAX_ACTORS_IN_CLUSTER = 100
-else:
-    MAX_ACTORS_IN_CLUSTER = 10000
+MAX_ACTORS_IN_CLUSTER = 100 if "SMOKE_TEST" in os.environ else 10000
 
 
 def test_max_actors():

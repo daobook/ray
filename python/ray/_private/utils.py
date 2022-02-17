@@ -95,8 +95,7 @@ def format_error_message(exception_message, task_exception=False):
     if task_exception:
         # For errors that occur inside of tasks, remove lines 1 and 2 which are
         # always the same, they just contain information about the worker code.
-        lines = lines[0:1] + lines[3:]
-        pass
+        lines = lines[:1] + lines[3:]
     return "\n".join(lines)
 
 
@@ -150,8 +149,10 @@ def publish_error_to_driver(error_type,
         pubsub_msg = gcs_utils.PubSubMessage()
         pubsub_msg.id = job_id.binary()
         pubsub_msg.data = error_data.SerializeToString()
-        redis_client.publish("ERROR_INFO:" + job_id.hex(),
-                             pubsub_msg.SerializeToString())
+        redis_client.publish(
+            f'ERROR_INFO:{job_id.hex()}', pubsub_msg.SerializeToString()
+        )
+
     else:
         raise ValueError(
             "One of redis_client and gcs_publisher needs to be specified!")
@@ -200,10 +201,7 @@ def decode(byte_str, allow_none=False):
 
     if not isinstance(byte_str, bytes):
         raise ValueError(f"The argument {byte_str} must be a bytes object.")
-    if sys.version_info >= (3, 0):
-        return byte_str.decode("ascii")
-    else:
-        return byte_str
+    return byte_str.decode("ascii") if sys.version_info >= (3, 0) else byte_str
 
 
 def ensure_str(s, encoding="utf-8", errors="strict"):
@@ -214,9 +212,8 @@ def ensure_str(s, encoding="utf-8", errors="strict"):
     """
     if isinstance(s, str):
         return s
-    else:
-        assert isinstance(s, bytes)
-        return s.decode(encoding, errors)
+    assert isinstance(s, bytes)
+    return s.decode(encoding, errors)
 
 
 def binary_to_object_ref(binary_object_ref):
@@ -242,7 +239,7 @@ def hex_to_binary(hex_identifier):
 # once we separate `WorkerID` from `UniqueID`.
 def compute_job_id_from_driver(driver_id):
     assert isinstance(driver_id, ray.WorkerID)
-    return ray.JobID(driver_id.binary()[0:ray.JobID.size()])
+    return ray.JobID(driver_id.binary()[:ray.JobID.size()])
 
 
 def compute_driver_id_from_job(job_id):
@@ -408,10 +405,7 @@ def open_log(path, unbuffered=False, **kwargs):
     kwargs.setdefault("mode", "a")
     kwargs.setdefault("encoding", "utf-8")
     stream = open(path, **kwargs)
-    if unbuffered:
-        return Unbuffered(stream)
-    else:
-        return stream
+    return Unbuffered(stream) if unbuffered else stream
 
 
 def get_system_memory():
@@ -505,8 +499,7 @@ def get_k8s_cpus(cpu_share_file_name="/sys/fs/cgroup/cpu/cpu.shares") -> float:
     """
     try:
         cpu_shares = int(open(cpu_share_file_name).read())
-        container_num_cpus = cpu_shares / 1024
-        return container_num_cpus
+        return cpu_shares / 1024
     except Exception as e:
         logger.exception("Error computing CPU limit of Ray Kubernetes pod.", e)
         return 1.0
@@ -601,7 +594,7 @@ def get_shared_memory_bytes():
         The size of the shared memory file system in bytes.
     """
     # Make sure this is only called on Linux.
-    assert sys.platform == "linux" or sys.platform == "linux2"
+    assert sys.platform in ["linux", "linux2"]
 
     shm_fd = os.open("/dev/shm", os.O_RDONLY)
     try:
@@ -632,18 +625,20 @@ def check_oversized_function(pickled: bytes, name: str, obj_type: str,
     if length <= ray_constants.FUNCTION_SIZE_WARN_THRESHOLD:
         return
     elif length < ray_constants.FUNCTION_SIZE_ERROR_THRESHOLD:
-        warning_message = (
-            "The {} {} is very large ({} MiB). "
-            "Check that its definition is not implicitly capturing a large "
-            "array or other object in scope. Tip: use ray.put() to put large "
-            "objects in the Ray object store.").format(obj_type, name,
-                                                       length // (1024 * 1024))
         if worker:
+            warning_message = (
+                "The {} {} is very large ({} MiB). "
+                "Check that its definition is not implicitly capturing a large "
+                "array or other object in scope. Tip: use ray.put() to put large "
+                "objects in the Ray object store.").format(obj_type, name,
+                                                           length // (1024 * 1024))
             push_error_to_driver(
                 worker,
                 ray_constants.PICKLING_LARGE_OBJECT_PUSH_ERROR,
-                "Warning: " + warning_message,
-                job_id=worker.current_job_id)
+                f'Warning: {warning_message}',
+                job_id=worker.current_job_id,
+            )
+
     else:
         error = (
             "The {} {} is too large ({} MiB > FUNCTION_SIZE_ERROR_THRESHOLD={}"
@@ -735,7 +730,7 @@ def detect_fate_sharing_support_win32():
                 job = None
         win32_AssignProcessToJobObject = (kernel32.AssignProcessToJobObject
                                           if kernel32 is not None else False)
-        win32_job = job if job else False
+        win32_job = job or False
     return bool(win32_job)
 
 
@@ -749,7 +744,7 @@ def detect_fate_sharing_support_linux():
             prctl.argtypes = [c_int, c_ulong, c_ulong, c_ulong, c_ulong]
         except (AttributeError, TypeError):
             prctl = None
-        linux_prctl = prctl if prctl else False
+        linux_prctl = prctl or False
     return bool(linux_prctl)
 
 
@@ -819,9 +814,7 @@ def try_make_directory_shared(directory_path):
         # on a directory may not own it. The chmod is attempted whether the
         # directory is new or not to avoid race conditions.
         # ray-project/ray/#3591
-        if e.errno in [errno.EACCES, errno.EPERM]:
-            pass
-        else:
+        if e.errno not in [errno.EACCES, errno.EPERM]:
             raise
 
 
@@ -853,16 +846,15 @@ def try_to_symlink(symlink_path, target_path):
     target_path = os.path.expanduser(target_path)
 
     if os.path.exists(symlink_path):
-        if os.path.islink(symlink_path):
-            # Try to remove existing symlink.
-            try:
-                os.remove(symlink_path)
-            except OSError:
-                return
-        else:
+        if not os.path.islink(symlink_path):
             # There's an existing non-symlink file, don't overwrite it.
             return
 
+        # Try to remove existing symlink.
+        try:
+            os.remove(symlink_path)
+        except OSError:
+            return
     try:
         os.symlink(target_path, symlink_path)
     except OSError:
@@ -940,9 +932,15 @@ def get_conda_env_dir(env_name):
         env_dir = os.path.join(conda_envs_dir, env_name)
     if not os.path.isdir(env_dir):
         raise ValueError(
-            "conda env " + env_name +
-            " not found in conda envs directory. Run `conda env list` to " +
-            "verify the name is correct.")
+            (
+                (
+                    f'conda env {env_name}'
+                    + " not found in conda envs directory. Run `conda env list` to "
+                )
+                + "verify the name is correct."
+            )
+        )
+
     return env_dir
 
 
@@ -1063,23 +1061,20 @@ def get_wheel_filename(
         The wheel file name.  Examples:
             ray-2.0.0.dev0-cp38-cp38-manylinux2014_x86_64.whl
     """
-    assert py_version in ["36", "37", "38", "39"], py_version
+    assert py_version in {"36", "37", "38", "39"}, py_version
 
     os_strings = {
         "darwin": "macosx_10_15_x86_64"
-        if py_version in ["38", "39"] else "macosx_10_15_intel",
+        if py_version in {"38", "39"}
+        else "macosx_10_15_intel",
         "linux": "manylinux2014_x86_64",
-        "win32": "win_amd64"
+        "win32": "win_amd64",
     }
+
 
     assert sys_platform in os_strings, sys_platform
 
-    wheel_filename = (
-        f"ray-{ray_version}-cp{py_version}-"
-        f"cp{py_version}{'m' if py_version in ['36', '37'] else ''}"
-        f"-{os_strings[sys_platform]}.whl")
-
-    return wheel_filename
+    return f'ray-{ray_version}-cp{py_version}-cp{py_version}{"m" if py_version in {"36", "37"} else ""}-{os_strings[sys_platform]}.whl'
 
 
 def get_master_wheel_url(
@@ -1118,7 +1113,7 @@ def get_release_wheel_url(
 def validate_namespace(namespace: str):
     if not isinstance(namespace, str):
         raise TypeError("namespace must be None or a string.")
-    elif namespace == "":
+    elif not namespace:
         raise ValueError("\"\" is not a valid namespace. "
                          "Pass None to not specify a namespace.")
 
@@ -1127,18 +1122,16 @@ def init_grpc_channel(address: str,
                       options: Optional[Sequence[Tuple[str, Any]]] = None,
                       asynchronous: bool = False):
     grpc_module = aiogrpc if asynchronous else grpc
-    if os.environ.get("RAY_USE_TLS", "0").lower() in ("1", "true"):
-        server_cert_chain, private_key, ca_cert = load_certs_from_env()
-        credentials = grpc.ssl_channel_credentials(
-            certificate_chain=server_cert_chain,
-            private_key=private_key,
-            root_certificates=ca_cert)
-        channel = grpc_module.secure_channel(
-            address, credentials, options=options)
-    else:
-        channel = grpc_module.insecure_channel(address, options=options)
+    if os.environ.get("RAY_USE_TLS", "0").lower() not in ("1", "true"):
+        return grpc_module.insecure_channel(address, options=options)
 
-    return channel
+    server_cert_chain, private_key, ca_cert = load_certs_from_env()
+    credentials = grpc.ssl_channel_credentials(
+        certificate_chain=server_cert_chain,
+        private_key=private_key,
+        root_certificates=ca_cert)
+    return grpc_module.secure_channel(
+            address, credentials, options=options)
 
 
 def check_dashboard_dependencies_installed() -> bool:

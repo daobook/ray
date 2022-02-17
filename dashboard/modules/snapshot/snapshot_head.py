@@ -136,12 +136,12 @@ class APIHead(dashboard_utils.DashboardHeadModule):
                 for replica_actor_id, actor_info in deployment_info[
                         "actors"].items():
                     if replica_actor_id in actors:
-                        serve_metadata = dict()
-                        serve_metadata["replica_tag"] = actor_info[
-                            "replica_tag"]
-                        serve_metadata["deployment_name"] = deployment_info[
-                            "name"]
-                        serve_metadata["version"] = actor_info["version"]
+                        serve_metadata = {
+                            'replica_tag': actor_info["replica_tag"],
+                            'deployment_name': deployment_info["name"],
+                            'version': actor_info["version"],
+                        }
+
                         actors[replica_actor_id]["metadata"][
                             "serve"] = serve_metadata
         return actors

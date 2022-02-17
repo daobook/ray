@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _encode_plugin_uri(plugin: str, uri: str) -> str:
-    return plugin + "|" + uri
+    return f'{plugin}|{uri}'
 
 
 def _decode_plugin_uri(plugin_uri: str) -> Tuple[str, str]:
@@ -136,10 +136,7 @@ def parse_and_validate_pip(pip: Union[str, List[str]]) -> Optional[List[str]]:
             raise ValueError(f"{pip_file} is not a valid file")
         result = pip_file.read_text().strip().split("\n")
     elif isinstance(pip, list) and all(isinstance(dep, str) for dep in pip):
-        if len(pip) == 0:
-            result = None
-        else:
-            result = pip
+        result = None if len(pip) == 0 else pip
     else:
         raise TypeError("runtime_env['pip'] must be of type str or "
                         f"List[str], got {type(pip)}")
@@ -165,7 +162,7 @@ def parse_and_validate_excludes(excludes: List[str]) -> List[str]:
     """
     assert excludes is not None
 
-    if isinstance(excludes, list) and len(excludes) == 0:
+    if isinstance(excludes, list) and not excludes:
         return None
 
     if (isinstance(excludes, list)
@@ -185,7 +182,7 @@ def parse_and_validate_env_vars(
     If an empty dictionary is passed, we return `None` for consistency.
     """
     assert env_vars is not None
-    if len(env_vars) == 0:
+    if not env_vars:
         return None
 
     if not (isinstance(env_vars, dict) and all(
@@ -305,9 +302,8 @@ class ParsedRuntimeEnv(dict):
 
         if "_ray_commit" in runtime_env:
             self["_ray_commit"] = runtime_env["_ray_commit"]
-        else:
-            if self.get("pip") or self.get("conda"):
-                self["_ray_commit"] = ray.__commit__
+        elif self.get("pip") or self.get("conda"):
+            self["_ray_commit"] = ray.__commit__
 
         # Used for testing wheels that have not yet been merged into master.
         # If this is set to True, then we do not inject Ray into the conda
@@ -318,7 +314,7 @@ class ParsedRuntimeEnv(dict):
             self["_inject_current_ray"] = True
 
         if "plugins" in runtime_env:
-            self["plugins"] = dict()
+            self["plugins"] = {}
             for class_path, plugin_field in runtime_env["plugins"].items():
                 plugin_class: RuntimeEnvPlugin = import_attr(class_path)
                 if not issubclass(plugin_class, RuntimeEnvPlugin):
@@ -355,10 +351,9 @@ class ParsedRuntimeEnv(dict):
         if "py_modules" in self:
             for uri in self["py_modules"]:
                 plugin_uris.append(_encode_plugin_uri("py_modules", uri))
-        if "conda" or "pip" in self:
-            uri = conda.get_uri(self)
-            if uri is not None:
-                plugin_uris.append(_encode_plugin_uri("conda", uri))
+        uri = conda.get_uri(self)
+        if uri is not None:
+            plugin_uris.append(_encode_plugin_uri("conda", uri))
 
         return plugin_uris
 

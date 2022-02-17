@@ -23,10 +23,7 @@ def get_rss(memory_info):
 def get_shared(virtual_memory):
     """Get the estimated shared memory usage from psutil virtual mem info."""
     # OSX doesn't have the shared attribute
-    if hasattr(virtual_memory, "shared"):
-        return virtual_memory.shared
-    else:
-        return 0
+    return virtual_memory.shared if hasattr(virtual_memory, "shared") else 0
 
 
 def get_top_n_memory_usage(n: int = 10):

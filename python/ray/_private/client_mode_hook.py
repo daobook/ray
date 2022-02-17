@@ -97,11 +97,10 @@ def client_mode_hook(func=None, *, auto_init: bool):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        if client_mode_should_convert(auto_init=auto_init):
-            # Legacy code
-            # we only convert init function if RAY_CLIENT_MODE=1
-            if func.__name__ != "init" or is_client_mode_enabled_by_default:
-                return getattr(ray, func.__name__)(*args, **kwargs)
+        if client_mode_should_convert(auto_init=auto_init) and (
+            func.__name__ != "init" or is_client_mode_enabled_by_default
+        ):
+            return getattr(ray, func.__name__)(*args, **kwargs)
         return func(*args, **kwargs)
 
     return wrapper

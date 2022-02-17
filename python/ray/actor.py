@@ -106,10 +106,7 @@ class ActorMethod:
 
         # Acquire a hard ref to the actor, this is useful mainly when passing
         # actor method handles to remote functions.
-        if hardref:
-            self._actor_hard_ref = actor
-        else:
-            self._actor_hard_ref = None
+        self._actor_hard_ref = actor if hardref else None
 
     def __call__(self, *args, **kwargs):
         raise TypeError("Actor methods cannot be called directly. Instead "
@@ -606,11 +603,7 @@ class ActorClass:
         is_asyncio = actor_has_async_methods
 
         if max_concurrency is None:
-            if is_asyncio:
-                max_concurrency = 1000
-            else:
-                max_concurrency = 1
-
+            max_concurrency = 1000 if is_asyncio else 1
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be >= 1")
 
@@ -748,23 +741,18 @@ class ActorClass:
 
         if runtime_env and not isinstance(runtime_env, ParsedRuntimeEnv):
             runtime_env = ParsedRuntimeEnv(runtime_env)
-        elif isinstance(runtime_env, ParsedRuntimeEnv):
-            pass
-        else:
+        elif not isinstance(runtime_env, ParsedRuntimeEnv):
             runtime_env = meta.runtime_env
 
         parent_runtime_env = worker.core_worker.get_current_runtime_env()
         parsed_runtime_env = override_task_or_actor_runtime_env(
             runtime_env, parent_runtime_env)
 
-        concurrency_groups_dict = {}
-        for cg_name in meta.concurrency_groups:
-            concurrency_groups_dict[cg_name] = {
+        concurrency_groups_dict = {cg_name: {
                 "name": cg_name,
                 "max_concurrency": meta.concurrency_groups[cg_name],
                 "function_descriptors": [],
-            }
-
+            } for cg_name in meta.concurrency_groups}
         # Update methods
         for method_name in meta.method_meta.concurrency_group_for_methods:
             cg_name = meta.method_meta.concurrency_group_for_methods[
@@ -798,7 +786,7 @@ class ActorClass:
             runtime_env_uris=parsed_runtime_env.get_uris(),
             concurrency_groups_dict=concurrency_groups_dict or dict())
 
-        actor_handle = ActorHandle(
+        return ActorHandle(
             meta.language,
             actor_id,
             meta.method_meta.decorators,
@@ -808,8 +796,6 @@ class ActorClass:
             meta.actor_creation_function_descriptor,
             worker.current_session_and_job,
             original_handle=True)
-
-        return actor_handle
 
 
 class ActorHandle:
@@ -1001,13 +987,8 @@ class ActorHandle:
         worker = ray.worker.global_worker
         worker.check_connected()
 
-        if hasattr(worker, "core_worker"):
-            # Non-local mode
-            state = worker.core_worker.serialize_actor_handle(
-                self._ray_actor_id)
-        else:
-            # Local mode
-            state = ({
+        return worker.core_worker.serialize_actor_handle(
+                self._ray_actor_id) if hasattr(worker, "core_worker") else ({
                 "actor_language": self._ray_actor_language,
                 "actor_id": self._ray_actor_id,
                 "method_decorators": self._ray_method_decorators,
@@ -1017,8 +998,6 @@ class ActorHandle:
                 "actor_creation_function_descriptor": self.
                 _ray_actor_creation_function_descriptor,
             }, None)
-
-        return state
 
     @classmethod
     def _deserialization_helper(cls, state, outer_object_ref=None):
@@ -1140,24 +1119,22 @@ def exit_actor():
             worker is not an actor.
     """
     worker = ray.worker.global_worker
-    if worker.mode == ray.WORKER_MODE and not worker.actor_id.is_nil():
-        # Intentionally disconnect the core worker from the raylet so the
-        # raylet won't push an error message to the driver.
-        ray.worker.disconnect()
-        # Disconnect global state from GCS.
-        ray.state.state.disconnect()
-
-        # In asyncio actor mode, we can't raise SystemExit because it will just
-        # quit the asycnio event loop thread, not the main thread. Instead, we
-        # raise a custom error to the main thread to tell it to exit.
-        if worker.core_worker.current_actor_is_asyncio():
-            raise AsyncioActorExit()
-
-        # Set a flag to indicate this is an intentional actor exit. This
-        # reduces log verbosity.
-        exit = SystemExit(0)
-        exit.is_ray_terminate = True
-        raise exit
-        assert False, "This process should have terminated."
-    else:
+    if worker.mode != ray.WORKER_MODE or worker.actor_id.is_nil():
         raise TypeError("exit_actor called on a non-actor worker.")
+    # Intentionally disconnect the core worker from the raylet so the
+    # raylet won't push an error message to the driver.
+    ray.worker.disconnect()
+    # Disconnect global state from GCS.
+    ray.state.state.disconnect()
+
+    # In asyncio actor mode, we can't raise SystemExit because it will just
+    # quit the asycnio event loop thread, not the main thread. Instead, we
+    # raise a custom error to the main thread to tell it to exit.
+    if worker.core_worker.current_actor_is_asyncio():
+        raise AsyncioActorExit()
+
+    # Set a flag to indicate this is an intentional actor exit. This
+    # reduces log verbosity.
+    exit = SystemExit(0)
+    exit.is_ray_terminate = True
+    raise exit

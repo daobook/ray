@@ -22,6 +22,7 @@ Example usage for git/svn users:
       clang-tidy-diff.py -fix -checks=-*,modernize-use-override
 """
 
+
 import argparse
 import glob
 import json
@@ -40,9 +41,7 @@ try:
 except ImportError:
     yaml = None
 
-is_py2 = sys.version[0] == "2"
-
-if is_py2:
+if is_py2 := sys.version[0] == "2":
     import Queue as queue
 else:
     import queue as queue
@@ -70,8 +69,7 @@ def run_tidy(task_queue, lock, timeout):
                     sys.stderr.flush()
         except Exception as e:
             with lock:
-                sys.stderr.write("Failed: " + str(e) + ": ".join(command) +
-                                 "\n")
+                sys.stderr.write((f'Failed: {str(e)}' + ": ".join(command) + "\n"))
         finally:
             with lock:
                 if timeout is not None and watchdog is not None:
@@ -204,8 +202,9 @@ def main():
     filename = None
     lines_by_file = {}
     for line in sys.stdin:
-        match = re.search('^\+\+\+\ \"?(.*?/){%s}([^ \t\n\"]*)' % args.p, line)
-        if match:
+        if match := re.search(
+            '^\+\+\+\ \"?(.*?/){%s}([^ \t\n\"]*)' % args.p, line
+        ):
             filename = match.group(2)
         if filename is None:
             continue
@@ -213,16 +212,12 @@ def main():
         if args.regex is not None:
             if not re.match("^%s$" % args.regex, filename):
                 continue
-        else:
-            if not re.match("^%s$" % args.iregex, filename, re.IGNORECASE):
-                continue
+        elif not re.match("^%s$" % args.iregex, filename, re.IGNORECASE):
+            continue
 
-        match = re.search("^@@.*\+(\d+)(,(\d+))?", line)
-        if match:
+        if match := re.search("^@@.*\+(\d+)(,(\d+))?", line):
             start_line = int(match.group(1))
-            line_count = 1
-            if match.group(3):
-                line_count = int(match.group(3))
+            line_count = int(match.group(3)) if match.group(3) else 1
             if line_count == 0:
                 continue
             end_line = start_line + line_count - 1
@@ -255,15 +250,15 @@ def main():
     if args.fix:
         common_clang_tidy_args.append("-fix")
     if args.checks != "":
-        common_clang_tidy_args.append("-checks=" + args.checks)
+        common_clang_tidy_args.append(f'-checks={args.checks}')
     if args.quiet:
         common_clang_tidy_args.append("-quiet")
     if args.build_path is not None:
         common_clang_tidy_args.append("-p=%s" % args.build_path)
-    for arg in args.extra_arg:
-        common_clang_tidy_args.append("-extra-arg=%s" % arg)
-    for arg in args.extra_arg_before:
-        common_clang_tidy_args.append("-extra-arg-before=%s" % arg)
+    common_clang_tidy_args.extend("-extra-arg=%s" % arg for arg in args.extra_arg)
+    common_clang_tidy_args.extend(
+        "-extra-arg-before=%s" % arg for arg in args.extra_arg_before
+    )
 
     for name in lines_by_file:
         line_filter_json = json.dumps(
@@ -274,14 +269,13 @@ def main():
             separators=(",", ":"))
 
         # Run clang-tidy on files containing changes.
-        command = [args.clang_tidy_binary]
-        command.append("-line-filter=" + line_filter_json)
+        command = [args.clang_tidy_binary, f'-line-filter={line_filter_json}']
         if yaml and args.export_fixes:
             # Get a temporary file. We immediately close the handle so
             # clang-tidy can overwrite it.
             (handle, tmp_name) = tempfile.mkstemp(suffix=".yaml", dir=tmpdir)
             os.close(handle)
-            command.append("-export-fixes=" + tmp_name)
+            command.append(f'-export-fixes={tmp_name}')
         command.extend(common_clang_tidy_args)
         command.append(name)
         command.extend(clang_tidy_args)
@@ -292,7 +286,7 @@ def main():
     task_queue.join()
 
     if yaml and args.export_fixes:
-        print("Writing fixes to " + args.export_fixes + " ...")
+        print(f'Writing fixes to {args.export_fixes} ...')
         try:
             merge_replacement_files(tmpdir, args.export_fixes)
         except Exception:

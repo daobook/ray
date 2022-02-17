@@ -285,7 +285,7 @@ def _split_address(address: str) -> Tuple[str, str]:
     Splits address into a module string (scheme) and an inner_address.
     """
     if "://" not in address:
-        address = "ray://" + address
+        address = f'ray://{address}'
     # NOTE: We use a custom splitting function instead of urllib because
     # PEP allows "underscores" in a module names, while URL schemes do not
     # allow them.

@@ -282,9 +282,8 @@ class JobManager:
                 for key in node["Resources"].keys():
                     if key.startswith("node:"):
                         return key
-        else:
-            raise ValueError(
-                "Cannot find the node dictionary for current node.")
+        raise ValueError(
+            "Cannot find the node dictionary for current node.")
 
     def _handle_supervisor_startup(self, job_id: str,
                                    result: Optional[Exception]):
@@ -397,13 +396,12 @@ class JobManager:
                 False if no running job found
         """
         job_supervisor_actor = self._get_actor_for_job(job_id)
-        if job_supervisor_actor is not None:
-            # Actor is still alive, signal it to stop the driver, fire and
-            # forget
-            job_supervisor_actor.stop.remote()
-            return True
-        else:
+        if job_supervisor_actor is None:
             return False
+        # Actor is still alive, signal it to stop the driver, fire and
+        # forget
+        job_supervisor_actor.stop.remote()
+        return True
 
     def get_job_status(self, job_id: str) -> JobStatusInfo:
         """Get latest status of a job. If job supervisor actor is no longer

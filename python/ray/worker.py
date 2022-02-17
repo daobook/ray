@@ -393,11 +393,15 @@ class Worker:
             # First run the function on the driver.
             # We always run the task locally.
             function({"worker": self})
-            # Check if the function has already been put into redis.
-            function_exported = self.gcs_client.internal_kv_put(
-                b"Lock:" + key, b"1", False,
-                ray_constants.KV_NAMESPACE_FUNCTION_TABLE) == 0
-            if function_exported is True:
+            if (
+                function_exported := self.gcs_client.internal_kv_put(
+                    b"Lock:" + key,
+                    b"1",
+                    False,
+                    ray_constants.KV_NAMESPACE_FUNCTION_TABLE,
+                )
+                == 0
+            ):
                 # In this case, the function has already been exported, so
                 # we don't need to export it again.
                 return
@@ -495,12 +499,13 @@ def get_gpu_ids():
     worker = global_worker
     worker.check_connected()
 
-    if worker.mode != WORKER_MODE:
-        if log_once("worker_get_gpu_ids_empty_from_driver"):
-            logger.warning(
-                "`ray.get_gpu_ids()` will always return the empty list when "
-                "called from the driver. This is because Ray does not manage "
-                "GPU allocations to the driver process.")
+    if worker.mode != WORKER_MODE and log_once(
+        "worker_get_gpu_ids_empty_from_driver"
+    ):
+        logger.warning(
+            "`ray.get_gpu_ids()` will always return the empty list when "
+            "called from the driver. This is because Ray does not manage "
+            "GPU allocations to the driver process.")
 
     # TODO(ilr) Handle inserting resources in local mode
     all_resource_ids = global_worker.core_worker.resource_ids()
@@ -739,11 +744,9 @@ def init(
             arguments is passed in.
     """
 
-    # If available, use RAY_ADDRESS to override if the address was left
-    # unspecified, or set to "auto" in the call to init
-    address_env_var = os.environ.get(
-        ray_constants.RAY_ADDRESS_ENVIRONMENT_VARIABLE)
-    if address_env_var:
+    if address_env_var := os.environ.get(
+        ray_constants.RAY_ADDRESS_ENVIRONMENT_VARIABLE
+    ):
         if address is None or address == "auto":
             address = address_env_var
             logger.info(
@@ -801,8 +804,6 @@ def init(
                 "Fix with 'ulimit -n 8192'".format(soft))
     except ImportError:
         logger.debug("Could not import resource module (on Windows)")
-        pass
-
     if RAY_JOB_CONFIG_JSON_ENV_VAR in os.environ:
         if runtime_env:
             logger.warning(
@@ -840,22 +841,17 @@ def init(
         logger.info(
             f"Connecting to existing Ray cluster at address: {redis_address}")
 
-    if local_mode:
-        driver_mode = LOCAL_MODE
-    else:
-        driver_mode = SCRIPT_MODE
-
+    driver_mode = LOCAL_MODE if local_mode else SCRIPT_MODE
     if global_worker.connected:
-        if ignore_reinit_error:
-            logger.info(
-                "Calling ray.init() again after it has already been called.")
-            return
-        else:
+        if not ignore_reinit_error:
             raise RuntimeError("Maybe you called ray.init twice by accident? "
                                "This error can be suppressed by passing in "
                                "'ignore_reinit_error=True' or by calling "
                                "'ray.shutdown()' prior to 'ray.init()'.")
 
+        logger.info(
+            "Calling ray.init() again after it has already been called.")
+        return
     _system_config = _system_config or {}
     if not isinstance(_system_config, dict):
         raise TypeError("The _system_config must be a dict.")
@@ -1141,13 +1137,12 @@ def print_worker_logs(data: Dict[str, str], print_file: Any):
         """The PID prefix for this log line."""
         if data.get("pid") in ["autoscaler", "raylet"]:
             return ""
-        else:
-            res = "pid="
-            if data.get("actor_name"):
-                res = data["actor_name"] + " " + res
-            elif data.get("task_name"):
-                res = data["task_name"] + " " + res
-            return res
+        res = "pid="
+        if data.get("actor_name"):
+            res = data["actor_name"] + " " + res
+        elif data.get("task_name"):
+            res = data["task_name"] + " " + res
+        return res
 
     def color_for(data: Dict[str, str], line: str) -> str:
         """The color for this log line."""
@@ -1237,11 +1232,7 @@ def listen_error_messages_raylet(worker, threads_stopped):
                 continue
 
             error_message = error_data.error_message
-            if (error_data.type == ray_constants.TASK_PUSH_ERROR):
-                # TODO(ekl) remove task push errors entirely now that we have
-                # the separate unhandled exception handler.
-                pass
-            else:
+            if error_data.type != ray_constants.TASK_PUSH_ERROR:
                 logger.warning(error_message)
     except (OSError, redis.exceptions.ConnectionError) as e:
         logger.error(f"listen_error_messages_raylet: {e}")
@@ -1291,13 +1282,9 @@ def listen_error_messages_from_gcs(worker, threads_stopped):
                 continue
 
             error_message = error_data.error_message
-            if error_data.type == ray_constants.TASK_PUSH_ERROR:
-                # TODO(ekl) remove task push errors entirely now that we have
-                # the separate unhandled exception handler.
-                pass
-            else:
+            if error_data.type != ray_constants.TASK_PUSH_ERROR:
                 logger.warning(error_message)
-    except (OSError, ConnectionError) as e:
+    except OSError as e:
         logger.error(f"listen_error_messages_from_gcs: {e}")
 
 

@@ -90,10 +90,7 @@ class Node:
             node_ip_address = ray.util.get_node_ip_address()
         self._node_ip_address = node_ip_address
 
-        if ray_params.raylet_ip_address:
-            raylet_ip_address = ray_params.raylet_ip_address
-        else:
-            raylet_ip_address = node_ip_address
+        raylet_ip_address = ray_params.raylet_ip_address or node_ip_address
         self._gcs_client = None
 
         if raylet_ip_address != node_ip_address and (not connect_only or head):
@@ -196,9 +193,9 @@ class Node:
 
         if head:
             ray_params.update_if_absent(num_redis_shards=1)
-            gcs_server_port = os.getenv(
-                ray_constants.GCS_PORT_ENVIRONMENT_VARIABLE)
-            if gcs_server_port:
+            if gcs_server_port := os.getenv(
+                ray_constants.GCS_PORT_ENVIRONMENT_VARIABLE
+            ):
                 ray_params.update_if_absent(gcs_server_port=gcs_server_port)
             self._webui_url = None
         else:
@@ -453,7 +450,7 @@ class Node:
     def get_gcs_client(self):
         if self._gcs_client is None:
             num_retries = NUM_REDIS_GET_RETRIES
-            for i in range(num_retries):
+            for _ in range(num_retries):
                 try:
                     self._gcs_client = \
                         ray._private.gcs_utils.GcsClient.create_from_redis(
@@ -510,8 +507,7 @@ class Node:
             if index == 0:
                 filename = os.path.join(directory_name, prefix + suffix)
             else:
-                filename = os.path.join(directory_name,
-                                        prefix + "." + str(index) + suffix)
+                filename = os.path.join(directory_name, f'{prefix}.{str(index)}{suffix}')
             index += 1
             if not os.path.exists(filename):
                 # Save the index.
@@ -697,9 +693,10 @@ class Node:
         redis_log_files = []
         if self._ray_params.external_addresses is None:
             redis_log_files = [self.get_log_file_handles("redis", unique=True)]
-            for i in range(self._ray_params.num_redis_shards):
-                redis_log_files.append(
-                    self.get_log_file_handles(f"redis-shard_{i}", unique=True))
+            redis_log_files.extend(
+                self.get_log_file_handles(f"redis-shard_{i}", unique=True)
+                for i in range(self._ray_params.num_redis_shards)
+            )
 
         (self._redis_address, redis_shards,
          process_infos) = ray._private.services.start_redis(
@@ -1182,9 +1179,12 @@ class Node:
         """
         result = []
         for process_type, process_infos in self.all_processes.items():
-            for process_info in process_infos:
-                if process_info.process.poll() is None:
-                    result.append((process_type, process_info.process))
+            result.extend(
+                (process_type, process_info.process)
+                for process_info in process_infos
+                if process_info.process.poll() is None
+            )
+
         return result
 
     def dead_processes(self):
@@ -1199,9 +1199,12 @@ class Node:
         """
         result = []
         for process_type, process_infos in self.all_processes.items():
-            for process_info in process_infos:
-                if process_info.process.poll() is not None:
-                    result.append((process_type, process_info.process))
+            result.extend(
+                (process_type, process_info.process)
+                for process_info in process_infos
+                if process_info.process.poll() is not None
+            )
+
         return result
 
     def any_processes_alive(self):
@@ -1224,8 +1227,9 @@ class Node:
         return not any(self.dead_processes())
 
     def destroy_external_storage(self):
-        object_spilling_config = self._config.get("object_spilling_config", {})
-        if object_spilling_config:
+        if object_spilling_config := self._config.get(
+            "object_spilling_config", {}
+        ):
             object_spilling_config = json.loads(object_spilling_config)
             from ray import external_storage
             storage = external_storage.setup_external_storage(
@@ -1280,7 +1284,7 @@ class Node:
         result = None
         if isinstance(key, str):
             key = key.encode()
-        for i in range(num_retries):
+        for _ in range(num_retries):
             try:
                 result = self.get_gcs_client().internal_kv_get(key, namespace)
             except Exception as e:
@@ -1289,9 +1293,8 @@ class Node:
 
             if result is not None:
                 break
-            else:
-                logger.debug(f"Fetched {key}=None from redis. Retrying.")
-                time.sleep(2)
+            logger.debug(f"Fetched {key}=None from redis. Retrying.")
+            time.sleep(2)
         if not result:
             raise RuntimeError(f"Could not read '{key}' from GCS (redis). "
                                "Has redis started correctly on the head node?")

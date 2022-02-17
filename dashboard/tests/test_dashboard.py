@@ -187,15 +187,14 @@ def test_http_get(enable_test_module, ray_start_with_dashboard):
     webui_url = ray_start_with_dashboard["webui_url"]
     webui_url = format_web_url(webui_url)
 
-    target_url = webui_url + "/test/dump"
+    target_url = f'{webui_url}/test/dump'
 
     timeout_seconds = 30
     start_time = time.time()
     while True:
         time.sleep(3)
         try:
-            response = requests.get(webui_url + "/test/http_get?url=" +
-                                    target_url)
+            response = requests.get((f'{webui_url}/test/http_get?url=' + target_url))
             response.raise_for_status()
             try:
                 dump_info = response.json()
@@ -246,16 +245,18 @@ def test_class_method_route_table(enable_test_module):
     assert test_agent_cls is not None
 
     def _has_route(route, method, path):
-        if isinstance(route, aiohttp.web.RouteDef):
-            if route.method == method and route.path == path:
-                return True
-        return False
+        return (
+            isinstance(route, aiohttp.web.RouteDef)
+            and route.method == method
+            and route.path == path
+        )
 
     def _has_static(route, path, prefix):
-        if isinstance(route, aiohttp.web.StaticDef):
-            if route.path == path and route.prefix == prefix:
-                return True
-        return False
+        return (
+            isinstance(route, aiohttp.web.StaticDef)
+            and route.path == path
+            and route.prefix == prefix
+        )
 
     all_routes = dashboard_utils.ClassMethodRouteTable.routes()
     assert any(_has_route(r, "HEAD", "/test/route_head") for r in all_routes)
@@ -382,7 +383,7 @@ def test_aiohttp_cache(enable_test_module, ray_start_with_dashboard):
     while True:
         time.sleep(1)
         try:
-            for x in range(10):
+            for _ in range(10):
                 response = requests.get(webui_url +
                                         "/test/aiohttp_cache/t1?value=1")
                 response.raise_for_status()
@@ -582,12 +583,10 @@ def test_http_proxy(enable_test_module, set_http_proxy, shutdown_only):
     while True:
         time.sleep(1)
         try:
-            response = requests.get(
-                webui_url + "/test/dump",
-                proxies={
-                    "http": None,
-                    "https": None
-                })
+            response = requests.get(f'{webui_url}/test/dump', proxies={
+                                "http": None,
+                                "https": None
+                            })
             response.raise_for_status()
             try:
                 response.json()
@@ -638,10 +637,10 @@ def test_dashboard_port_conflict(ray_start_with_dashboard):
     while True:
         time.sleep(1)
         try:
-            dashboard_url = ray.experimental.internal_kv._internal_kv_get(
+            if dashboard_url := ray.experimental.internal_kv._internal_kv_get(
                 ray_constants.REDIS_KEY_DASHBOARD,
-                namespace=ray_constants.KV_NAMESPACE_DASHBOARD)
-            if dashboard_url:
+                namespace=ray_constants.KV_NAMESPACE_DASHBOARD,
+            ):
                 new_port = int(dashboard_url.split(b":")[-1])
                 assert new_port > int(port)
                 break

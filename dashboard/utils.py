@@ -200,9 +200,7 @@ def get_all_modules(module_type):
     logger.info(f"Get all modules by type: {module_type.__name__}")
     import ray.dashboard.modules
 
-    for module_loader, name, ispkg in pkgutil.walk_packages(
-            ray.dashboard.modules.__path__,
-            ray.dashboard.modules.__name__ + "."):
+    for module_loader, name, ispkg in pkgutil.walk_packages(ray.dashboard.modules.__path__, f'{ray.dashboard.modules.__name__}.'):
         importlib.import_module(name)
     return [
         m for m in module_type.__subclasses__()
@@ -294,10 +292,7 @@ def message_to_dict(message, decode_keys=None, **kwargs):
                         new_list.append(i)
                 d[k] = new_list
             else:
-                if k in decode_keys:
-                    d[k] = binary_to_hex(b64decode(v))
-                else:
-                    d[k] = v
+                d[k] = binary_to_hex(b64decode(v)) if k in decode_keys else v
         return d
 
     if decode_keys:
@@ -485,9 +480,8 @@ def make_immutable(value, strict=True):
         return ImmutableDict(value)
     if value_type is list:
         return ImmutableList(value)
-    if strict:
-        if value_type not in _json_compatible_types:
-            raise TypeError("Type {} can't be immutable.".format(value_type))
+    if strict and value_type not in _json_compatible_types:
+        raise TypeError("Type {} can't be immutable.".format(value_type))
     return value
 
 
@@ -656,7 +650,7 @@ for immutable_type in Immutable.__subclasses__():
 
 async def get_aioredis_client(redis_address, redis_password,
                               retry_interval_seconds, retry_times):
-    for x in range(retry_times):
+    for _ in range(retry_times):
         try:
             return await aioredis.create_redis_pool(
                 address=redis_address, password=redis_password)

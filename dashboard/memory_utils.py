@@ -156,10 +156,7 @@ class MemoryTableEntry:
         actor_random_bits = object_ref_hex[TASKID_RANDOM_BITS_SIZE:
                                            TASKID_RANDOM_BITS_SIZE +
                                            ACTORID_RANDOM_BITS_SIZE]
-        if (random_bits == "f" * 16 and not actor_random_bits == "f" * 24):
-            return True
-        else:
-            return False
+        return random_bits == "f" * 16 and actor_random_bits != "f" * 24
 
     def as_dict(self):
         return {
@@ -323,9 +320,8 @@ def construct_memory_table(workers_stats: List,
                 pid=pid)
             if memory_table_entry.is_valid():
                 memory_table_entries.append(memory_table_entry)
-    memory_table = MemoryTable(
+    return MemoryTable(
         memory_table_entries, group_by_type=group_by, sort_by_type=sort_by)
-    return memory_table
 
 
 def track_reference_size(group):
@@ -408,7 +404,7 @@ entries per group...\n\n\n"
         ref_size = track_reference_size(group)
         for k, v in summary.items():
             if k == "total_object_size":
-                summary[k] = str(v / units[unit]) + f" {unit}"
+                summary[k] = f'{str(v / units[unit])} {unit}'
             else:
                 summary[k] = str(v) + f", ({ref_size[k] / units[unit]} {unit})"
         mem += f"--- Summary for {group_by}: {key} ---\n"
@@ -430,10 +426,10 @@ entries per group...\n\n\n"
                 units[unit]) + f" {unit}" if entry["object_size"] > -1 else "?"
             num_lines = 1
             if size > line_wrap_threshold and line_wrap:
-                call_site_length = 22
                 if len(entry["call_site"]) == 0:
                     entry["call_site"] = ["disabled"]
                 else:
+                    call_site_length = 22
                     entry["call_site"] = [
                         entry["call_site"][i:i + call_site_length] for i in
                         range(0, len(entry["call_site"]), call_site_length)
@@ -450,7 +446,9 @@ entries per group...\n\n\n"
                 if not isinstance(object_ref_values[i], list):
                     object_ref_values[i] = [object_ref_values[i]]
                 object_ref_values[i].extend(
-                    ["" for x in range(num_lines - len(object_ref_values[i]))])
+                    ["" for _ in range(num_lines - len(object_ref_values[i]))]
+                )
+
             for i in range(num_lines):
                 row = [elem[i] for elem in object_ref_values]
                 mem += object_ref_string\

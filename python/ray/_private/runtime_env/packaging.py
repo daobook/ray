@@ -167,7 +167,7 @@ def parse_uri(pkg_uri: str) -> Tuple[Protocol, str]:
     """
     uri = urlparse(pkg_uri)
     protocol = Protocol(uri.scheme)
-    if protocol == Protocol.S3 or protocol == Protocol.GS:
+    if protocol in [Protocol.S3, Protocol.GS]:
         return (protocol,
                 f"{protocol.value}_{uri.netloc}{uri.path.replace('/', '_')}")
     elif protocol == Protocol.HTTPS:
@@ -415,7 +415,7 @@ def download_and_unpack_package(
     Will be written to a directory named {base_directory}/{uri}.
     """
     pkg_file = Path(_get_local_path(base_directory, pkg_uri))
-    with FileLock(str(pkg_file) + ".lock"):
+    with FileLock(f'{str(pkg_file)}.lock'):
         if logger is None:
             logger = default_logger
 
@@ -506,12 +506,9 @@ def get_top_level_dir_from_compressed_package(package_path: str):
                 top_level_directory = file_name.split("/")[0]
             else:
                 return None
-        else:
-            # Confirm that all other files
-            # belong to the same top_level_directory
-            if "/" not in file_name or \
+        elif "/" not in file_name or \
                     file_name.split("/")[0] != top_level_directory:
-                return None
+            return None
 
     return top_level_directory
 
@@ -523,11 +520,7 @@ def extract_file_and_remove_top_level_dir(base_dir: str, fname: str,
     from fname's file path, and stores fname in the base_dir.
     """
 
-    fname_without_top_level_dir = "/".join(fname.split("/")[1:])
-
-    # If this condition is false, it means there was no top-level directory,
-    # so we do nothing
-    if fname_without_top_level_dir:
+    if fname_without_top_level_dir := "/".join(fname.split("/")[1:]):
         zip_ref.extract(fname, base_dir)
         os.rename(
             os.path.join(base_dir, fname),
@@ -592,7 +585,7 @@ def delete_package(pkg_uri: str, base_directory: str) -> bool:
 
     deleted = False
     path = Path(_get_local_path(base_directory, pkg_uri))
-    with FileLock(str(path) + ".lock"):
+    with FileLock(f'{str(path)}.lock'):
         path = path.with_suffix("")
         if path.exists():
             if path.is_dir() and not path.is_symlink():

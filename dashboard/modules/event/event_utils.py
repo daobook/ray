@@ -143,8 +143,7 @@ def monitor_events(
             if stat.st_size <= 0:
                 return []
             fid = stat.st_ino or file
-            monitor_file = monitor_files.get(fid)
-            if monitor_file:
+            if monitor_file := monitor_files.get(fid):
                 if (monitor_file.position == monitor_file.size
                         and monitor_file.size == stat.st_size
                         and monitor_file.mtime == stat.st_mtime):

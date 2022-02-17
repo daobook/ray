@@ -147,8 +147,9 @@ def run():
     actor = pb.actor
     # You can replace this with any arbitrary Ray task/actor.
     tasks_pre_launch = [
-        sleep_then_increment.remote(i, actor) for i in range(0, num_ticks)
+        sleep_then_increment.remote(i, actor) for i in range(num_ticks)
     ]
+
 
     pb.print_until_done()
     tasks = ray.get(tasks_pre_launch)

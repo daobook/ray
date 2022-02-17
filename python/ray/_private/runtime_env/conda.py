@@ -35,9 +35,8 @@ def _resolve_install_from_source_ray_dependencies():
     """Find the ray dependencies when Ray is install from source"""
     ray_source_python_path = _resolve_current_ray_path()
     setup_py_path = os.path.join(ray_source_python_path, "setup.py")
-    ray_install_requires = runpy.run_path(setup_py_path)[
+    return runpy.run_path(setup_py_path)[
         "setup_spec"].install_requires
-    return ray_install_requires
 
 
 def _inject_ray_to_conda_site(
@@ -193,14 +192,12 @@ def inject_dependencies(
 def _get_conda_env_hash(conda_dict: Dict) -> str:
     # Set `sort_keys=True` so that different orderings yield the same hash.
     serialized_conda_spec = json.dumps(conda_dict, sort_keys=True)
-    hash = hashlib.sha1(serialized_conda_spec.encode("utf-8")).hexdigest()
-    return hash
+    return hashlib.sha1(serialized_conda_spec.encode("utf-8")).hexdigest()
 
 
 def _get_pip_hash(pip_list: List[str]) -> str:
     serialized_pip_spec = json.dumps(pip_list)
-    hash = hashlib.sha1(serialized_pip_spec.encode("utf-8")).hexdigest()
-    return hash
+    return hashlib.sha1(serialized_pip_spec.encode("utf-8")).hexdigest()
 
 
 def get_uri(runtime_env: Dict) -> Optional[str]:
@@ -213,13 +210,13 @@ def get_uri(runtime_env: Dict) -> Optional[str]:
             # we don't track them with URIs.
             uri = None
         elif isinstance(conda, dict):
-            uri = "conda://" + _get_conda_env_hash(conda_dict=conda)
+            uri = f'conda://{_get_conda_env_hash(conda_dict=conda)}'
         else:
             raise TypeError("conda field received by RuntimeEnvAgent must be "
                             f"str or dict, not {type(conda).__name__}.")
     elif pip is not None:
         if isinstance(pip, list):
-            uri = "conda://" + _get_pip_hash(pip_list=pip)
+            uri = f'conda://{_get_pip_hash(pip_list=pip)}'
         else:
             raise TypeError("pip field received by RuntimeEnvAgent must be "
                             f"list, not {type(pip).__name__}.")
@@ -281,8 +278,7 @@ class CondaManager:
             conda_env_name = self._get_path_from_hash(hash)
             assert conda_dict is not None
 
-            ray_pip = current_ray_pip_specifier(logger=logger)
-            if ray_pip:
+            if ray_pip := current_ray_pip_specifier(logger=logger):
                 extra_pip_dependencies = [ray_pip, "ray[default]"]
             elif runtime_env.get("_inject_current_ray"):
                 extra_pip_dependencies = (

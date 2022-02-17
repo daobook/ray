@@ -122,10 +122,9 @@ class ReportHead(dashboard_utils.DashboardHeadModule):
         return dashboard_utils.rest_response(
             success=True,
             message="Got cluster status.",
-            autoscaling_status=legacy_status.decode()
-            if legacy_status else None,
+            autoscaling_status=legacy_status.decode() if legacy_status else None,
             autoscaling_error=error.decode() if error else None,
-            cluster_status=formatted_status if formatted_status else None,
+            cluster_status=formatted_status or None,
         )
 
     async def run(self, server):

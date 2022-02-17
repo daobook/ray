@@ -45,8 +45,7 @@ def get_job_submission_client_cluster_info(
             ClusterInfo object consisting of address, cookies, and metadata
             for JobSubmissionClient to use.
         """
-    return ClusterInfo(
-        address="http://" + address, cookies=None, metadata=None)
+    return ClusterInfo(address=f'http://{address}', cookies=None, metadata=None)
 
 
 def parse_cluster_info(address: str,
@@ -54,13 +53,11 @@ def parse_cluster_info(address: str,
     module_string, inner_address = _split_address(address.rstrip("/"))
 
     # If user passes in a raw HTTP(S) address, just pass it through.
-    if module_string == "http" or module_string == "https":
+    if module_string in ["http", "https"]:
         return ClusterInfo(address=address, cookies=None, metadata=None)
-    # If user passes in a Ray address, convert it to HTTP.
     elif module_string == "ray":
         return get_job_submission_client_cluster_info(
             inner_address, create_cluster_if_needed)
-    # Try to dynamically import the function to get cluster info.
     else:
         try:
             module = importlib.import_module(module_string)

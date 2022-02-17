@@ -58,15 +58,13 @@ class CustomGalleryItemDirective(Directive):
     add_index = False
 
     def run(self):
-        # Cutoff the `tooltip` after 195 chars.
-        if "tooltip" in self.options:
-            tooltip = self.options["tooltip"]
-            if len(self.options["tooltip"]) > 195:
-                tooltip = tooltip[:195] + "..."
-        else:
+        if "tooltip" not in self.options:
             raise ValueError("Need to provide :tooltip: under "
                              "`.. customgalleryitem::`.")
 
+        tooltip = self.options["tooltip"]
+        if len(self.options["tooltip"]) > 195:
+            tooltip = f'{tooltip[:195]}...'
         # Generate `thumbnail` used in the gallery.
         if "figure" in self.options:
             env = self.state.document.settings.env
@@ -78,7 +76,7 @@ class CustomGalleryItemDirective(Directive):
             sphinx_gallery.gen_rst.scale_image(figname, image_path, 400, 280)
             thumbnail = os.path.relpath(image_path, env.srcdir)
             # https://stackoverflow.com/questions/52138336/sphinx-reference-to-an-image-from-different-locations
-            thumbnail = "/" + thumbnail
+            thumbnail = f'/{thumbnail}'
         else:
             # "/" is the top level srcdir
             thumbnail = "/_static/img/thumbnails/default.png"

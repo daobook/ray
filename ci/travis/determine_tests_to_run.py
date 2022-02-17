@@ -116,7 +116,7 @@ if __name__ == "__main__":
                         impacted[test[0]] = True
 
             print("RLlib tests impacted: ", len(impacted), file=sys.stderr)
-            for test in impacted.keys():
+            for test in impacted:
                 print("    ", test, file=sys.stderr)
         except Exception as e:
             print("Failed to dry run py_dep_analysis.py", file=sys.stderr)

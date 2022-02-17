@@ -41,8 +41,5 @@ def masked_log(x):
     y = np.empty(x.shape, dtype=np.float64)
     lim = x.shape[0]
     for i in range(lim):
-        if x[i] <= 0:
-            y[i] = float("-inf")
-        else:
-            y[i] = log(x[i])
+        y[i] = float("-inf") if x[i] <= 0 else log(x[i])
     return y

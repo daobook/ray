@@ -105,8 +105,8 @@ def iter_tree_entries(root, on_error=None, follow_links=None):
 	if follow_links is None:
 		follow_links = True
 
-	for entry in _iter_tree_entries_next(os.path.abspath(root), '', {}, on_error, follow_links):
-		yield entry
+	yield from _iter_tree_entries_next(
+	    os.path.abspath(root), '', {}, on_error, follow_links)
 
 
 def iter_tree_files(root, on_error=None, follow_links=None):
@@ -207,9 +207,8 @@ def _iter_tree_entries_next(root_full, dir_rel, memo, on_error, follow_links):
 			# descendant files.
 			yield TreeEntry(node_name, node_rel, node_lstat, node_stat)
 
-			for entry in _iter_tree_entries_next(root_full, node_rel, memo, on_error, follow_links):
-				yield entry
-
+			yield from _iter_tree_entries_next(root_full, node_rel, memo, on_error,
+			                                   follow_links)
 		elif stat.S_ISREG(node_stat.st_mode) or is_link:
 			# Child node is either a file or an unfollowed link, yield it.
 			yield TreeEntry(node_name, node_rel, node_lstat, node_stat)
@@ -248,9 +247,8 @@ def match_file(patterns, file):
 	"""
 	matched = False
 	for pattern in patterns:
-		if pattern.include is not None:
-			if file in pattern.match((file,)):
-				matched = pattern.include
+		if pattern.include is not None and file in pattern.match((file, )):
+			matched = pattern.include
 	return matched
 
 
@@ -292,10 +290,10 @@ def _normalize_entries(entries, separators=None):
 	Returns a :class:`dict` mapping the each normalized file path (:class:`str`)
 	to the entry (:class:`.TreeEntry`)
 	"""
-	norm_files = {}
-	for entry in entries:
-		norm_files[normalize_file(entry.path, separators=separators)] = entry
-	return norm_files
+	return {
+	    normalize_file(entry.path, separators=separators): entry
+	    for entry in entries
+	}
 
 
 def normalize_file(file, separators=None):
@@ -344,10 +342,7 @@ def normalize_files(files, separators=None):
 	Returns a :class:`dict` mapping the each normalized file path (:class:`str`)
 	to the original file path (:class:`str`)
 	"""
-	norm_files = {}
-	for path in files:
-		norm_files[normalize_file(path, separators=separators)] = path
-	return norm_files
+	return {normalize_file(path, separators=separators): path for path in files}
 
 
 def register_pattern(name, pattern_factory, override=None):

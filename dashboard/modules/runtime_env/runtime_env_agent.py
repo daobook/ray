@@ -53,13 +53,13 @@ class RuntimeEnvAgent(dashboard_utils.DashboardAgentModule,
         super().__init__(dashboard_agent)
         self._runtime_env_dir = dashboard_agent.runtime_env_dir
         self._logging_params = dashboard_agent.logging_params
-        self._per_job_logger_cache = dict()
+        self._per_job_logger_cache = {}
         # Cache the results of creating envs to avoid repeatedly calling into
         # conda and other slow calls.
-        self._env_cache: Dict[str, CreatedEnvResult] = dict()
+        self._env_cache: Dict[str, CreatedEnvResult] = {}
         # Maps a serialized runtime env to a lock that is used
         # to prevent multiple concurrent installs of the same env.
-        self._env_locks: Dict[str, asyncio.Lock] = dict()
+        self._env_locks: Dict[str, asyncio.Lock] = {}
         # Keeps track of the URIs contained within each env so we can
         # invalidate the env cache when a URI is deleted.
         # This is a temporary mechanism until we have per-URI caching.
@@ -206,16 +206,35 @@ class RuntimeEnvAgent(dashboard_utils.DashboardAgentModule,
                     del self._env_cache[env]
 
             plugin, uri = _decode_plugin_uri(plugin_uri)
-            if plugin == "working_dir":
-                if not self._working_dir_manager.delete_uri(uri):
-                    failed_uris.append(uri)
-            elif plugin == "py_modules":
-                if not self._py_modules_manager.delete_uri(uri):
-                    failed_uris.append(uri)
-            elif plugin == "conda":
-                if not self._conda_manager.delete_uri(uri):
-                    failed_uris.append(uri)
-            else:
+            if (
+                plugin == "working_dir"
+                and not self._working_dir_manager.delete_uri(uri)
+                or plugin != "working_dir"
+                and plugin == "py_modules"
+                and not self._py_modules_manager.delete_uri(uri)
+                or plugin != "working_dir"
+                and plugin != "py_modules"
+                and plugin == "conda"
+                and not self._conda_manager.delete_uri(uri)
+            ):
+                failed_uris.append(uri)
+            elif (
+                (
+                    plugin != "working_dir"
+                    or not self._working_dir_manager.delete_uri(uri)
+                )
+                and (
+                    plugin == "working_dir"
+                    or plugin != "py_modules"
+                    or not self._py_modules_manager.delete_uri(uri)
+                )
+                and (
+                    plugin == "working_dir"
+                    or plugin == "py_modules"
+                    or plugin != "conda"
+                    or not self._conda_manager.delete_uri(uri)
+                )
+            ):
                 raise ValueError(
                     "RuntimeEnvAgent received DeleteURI request "
                     f"for unsupported plugin {plugin}. URI: {uri}")

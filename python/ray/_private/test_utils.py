@@ -96,27 +96,21 @@ def check_call_ray(args, capture_stdout=False, capture_stderr=False):
     # some deadlocks that occur when piping ray's output on Windows
     argv = ["ray"] + args
     if sys.platform == "win32":
-        result = check_call_module(
+        return check_call_module(
             ray_main,
             argv,
             capture_stdout=capture_stdout,
             capture_stderr=capture_stderr)
-    else:
-        stdout_redir = None
-        stderr_redir = None
-        if capture_stdout:
-            stdout_redir = subprocess.PIPE
-        if capture_stderr and capture_stdout:
-            stderr_redir = subprocess.STDOUT
-        elif capture_stderr:
-            stderr_redir = subprocess.PIPE
-        proc = subprocess.Popen(argv, stdout=stdout_redir, stderr=stderr_redir)
-        (stdout, stderr) = proc.communicate()
-        if proc.returncode:
-            raise subprocess.CalledProcessError(proc.returncode, argv, stdout,
-                                                stderr)
-        result = b"".join([s for s in [stdout, stderr] if s is not None])
-    return result
+    stderr_redir = None
+    stdout_redir = subprocess.PIPE if capture_stdout else None
+    if capture_stderr:
+        stderr_redir = subprocess.STDOUT if capture_stdout else subprocess.PIPE
+    proc = subprocess.Popen(argv, stdout=stdout_redir, stderr=stderr_redir)
+    (stdout, stderr) = proc.communicate()
+    if proc.returncode:
+        raise subprocess.CalledProcessError(proc.returncode, argv, stdout,
+                                            stderr)
+    return b"".join([s for s in [stdout, stderr] if s is not None])
 
 
 def wait_for_pid_to_exit(pid, timeout=20):
@@ -138,7 +132,7 @@ def wait_for_children_names_of_pid(pid, children_names, timeout=20):
     while time.time() - start_time < timeout:
         children = p.children(recursive=False)
         not_found_children = set(children_names) - {c.name() for c in children}
-        if len(not_found_children) == 0:
+        if not not_found_children:
             return
         time.sleep(0.1)
     raise RayTestTimeoutException(
@@ -252,7 +246,7 @@ def wait_for_num_nodes(num_nodes: int, timeout_s: int):
     start = time.time()
     next_feedback = start
     max_time = start + timeout_s
-    while not curr_nodes >= num_nodes:
+    while curr_nodes < num_nodes:
         now = time.time()
 
         if now >= max_time:
@@ -361,16 +355,18 @@ def recursive_fnmatch(dirpath, pattern):
     """
     matches = []
     for root, dirnames, filenames in os.walk(dirpath):
-        for filename in fnmatch.filter(filenames, pattern):
-            matches.append(os.path.join(root, filename))
+        matches.extend(
+            os.path.join(root, filename)
+            for filename in fnmatch.filter(filenames, pattern)
+        )
+
     return matches
 
 
 def generate_system_config_map(**kwargs):
-    ray_kwargs = {
+    return {
         "_system_config": kwargs,
     }
-    return ray_kwargs
 
 
 @ray.remote(num_cpus=0)
@@ -437,11 +433,7 @@ def same_elements(elems_a, elems_b):
         if x not in b:
             return False
 
-    for x in b:
-        if x not in a:
-            return False
-
-    return True
+    return all(x in a for x in b)
 
 
 @ray.remote
@@ -450,10 +442,7 @@ def _put(obj):
 
 
 def put_object(obj, use_ray_put):
-    if use_ray_put:
-        return ray.put(obj)
-    else:
-        return _put.remote(obj)
+    return ray.put(obj) if use_ray_put else _put.remote(obj)
 
 
 def put_unpinned_object(obj):
@@ -622,7 +611,7 @@ def format_web_url(url):
     """Format web url."""
     url = url.replace("localhost", "http://127.0.0.1")
     if not url.startswith("http://"):
-        return "http://" + url
+        return f'http://{url}'
     return url
 
 
@@ -674,8 +663,7 @@ def load_test_config(config_file_name):
     grandparent = path.parent.parent
     config_path = os.path.join(grandparent, "tests/test_cli_patterns",
                                config_file_name)
-    config = yaml.safe_load(open(config_path).read())
-    return config
+    return yaml.safe_load(open(config_path).read())
 
 
 def set_setup_func():
@@ -759,10 +747,10 @@ def placement_group_assert_no_leak(pgs_created):
         ray.util.remove_placement_group(pg)
 
     def wait_for_pg_removed():
-        for pg_entry in ray.util.placement_group_table().values():
-            if pg_entry["state"] != "REMOVED":
-                return False
-        return True
+        return all(
+            pg_entry["state"] == "REMOVED"
+            for pg_entry in ray.util.placement_group_table().values()
+        )
 
     wait_for_condition(wait_for_pg_removed)
 
@@ -990,11 +978,7 @@ def get_and_run_node_killer(node_kill_interval_s):
                 node_manager_pb2.ShutdownRayletRequest(graceful=graceful))
 
         def _get_alive_nodes(self, nodes):
-            alive_nodes = 0
-            for node in nodes:
-                if node["Alive"]:
-                    alive_nodes += 1
-            return alive_nodes
+            return sum(bool(node["Alive"]) for node in nodes)
 
     head_node_ip = ray.worker.global_worker.node_ip_address
     head_node_id = ray.worker.global_worker.current_node_id.hex()

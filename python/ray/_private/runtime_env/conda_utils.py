@@ -47,8 +47,7 @@ def get_conda_bin_executable(executable_name: str) -> str:
     ``RAY_CONDA_HOME`` is unspecified, this method simply returns the passed-in
     executable name.
     """
-    conda_home = os.environ.get(RAY_CONDA_HOME)
-    if conda_home:
+    if conda_home := os.environ.get(RAY_CONDA_HOME):
         return os.path.join(conda_home, "bin/%s" % executable_name)
     # Use CONDA_EXE as per https://github.com/conda/conda/issues/7126
     if "CONDA_EXE" in os.environ:
@@ -134,8 +133,7 @@ def get_conda_env_list() -> list:
     except EnvironmentError:
         raise ValueError(f"Could not find Conda executable at {conda_path}.")
     _, stdout, _ = exec_cmd([conda_path, "env", "list", "--json"])
-    envs = json.loads(stdout)["envs"]
-    return envs
+    return json.loads(stdout)["envs"]
 
 
 class ShellCommandException(Exception):

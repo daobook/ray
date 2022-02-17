@@ -183,7 +183,7 @@ hyperparameters_mapping = {}
 # when the task finishes.
 
 # Randomly generate sets of hyperparameters and launch a task to evaluate it.
-for i in range(num_evaluations):
+for _ in range(num_evaluations):
     hyperparameters = generate_hyperparameters()
     accuracy_id = evaluate_hyperparameters.remote(hyperparameters)
     remaining_ids.append(accuracy_id)

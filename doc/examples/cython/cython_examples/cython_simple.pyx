@@ -8,9 +8,7 @@ def simple_func(x, y, z):
 
 # Cython code directly callable from Python
 def fib(n):
-    if n < 2:
-        return n
-    return fib(n-2) + fib(n-1)
+    return n if n < 2 else fib(n-2) + fib(n-1)
 
 
 # Typed Cython code

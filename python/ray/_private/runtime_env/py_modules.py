@@ -63,7 +63,7 @@ def upload_py_modules_if_needed(
             module_uri = module_path
         else:
             # module_path is a local path.
-            excludes = runtime_env.get("excludes", None)
+            excludes = runtime_env.get("excludes")
             module_uri = get_uri_for_directory(module_path, excludes=excludes)
             upload_package_if_needed(
                 module_uri,

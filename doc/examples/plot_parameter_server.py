@@ -197,7 +197,7 @@ num_workers = 2
 
 ray.init(ignore_reinit_error=True)
 ps = ParameterServer.remote(1e-2)
-workers = [DataWorker.remote() for i in range(num_workers)]
+workers = [DataWorker.remote() for _ in range(num_workers)]
 
 ###########################################################################
 # We'll also instantiate a model on the driver process to evaluate the test
@@ -242,7 +242,7 @@ print("Running Asynchronous Parameter Server Training.")
 
 ray.init(ignore_reinit_error=True)
 ps = ParameterServer.remote(1e-2)
-workers = [DataWorker.remote() for i in range(num_workers)]
+workers = [DataWorker.remote() for _ in range(num_workers)]
 
 ###########################################################################
 # Here, workers will asynchronously compute the gradients given its
@@ -253,9 +253,10 @@ workers = [DataWorker.remote() for i in range(num_workers)]
 
 current_weights = ps.get_weights.remote()
 
-gradients = {}
-for worker in workers:
-    gradients[worker.compute_gradients.remote(current_weights)] = worker
+gradients = {
+    worker.compute_gradients.remote(current_weights): worker
+    for worker in workers
+}
 
 for i in range(iterations * num_workers):
     ready_gradient_list, _ = ray.wait(list(gradients))

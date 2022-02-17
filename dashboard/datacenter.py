@@ -149,14 +149,9 @@ class DataOrganizer:
         node_ip = DataSource.node_id_to_ip.get(node_id)
         # Merge node log count information into the payload
         log_info = DataSource.ip_and_pid_to_logs.get(node_ip, {})
-        node_log_count = 0
-        for entries in log_info.values():
-            node_log_count += len(entries)
+        node_log_count = sum(len(entries) for entries in log_info.values())
         error_info = DataSource.ip_and_pid_to_errors.get(node_ip, {})
-        node_err_count = 0
-        for entries in error_info.values():
-            node_err_count += len(entries)
-
+        node_err_count = sum(len(entries) for entries in error_info.values())
         node_stats.pop("coreWorkersStats", None)
 
         view_data = node_stats.get("viewData", [])
@@ -283,11 +278,10 @@ class DataOrganizer:
             task["state"] = "PENDING_RESOURCES"
             new_resource_pending_tasks.append(task)
 
-        results = {
+        return {
             task["actorCreationTaskSpec"]["actorId"]: task
             for task in new_resource_pending_tasks + new_infeasible_tasks
         }
-        return results
 
     @classmethod
     async def get_memory_table(cls,
@@ -296,9 +290,8 @@ class DataOrganizer:
         all_worker_stats = []
         for node_stats in DataSource.node_stats.values():
             all_worker_stats.extend(node_stats.get("coreWorkersStats", []))
-        memory_information = memory_utils.construct_memory_table(
+        return memory_utils.construct_memory_table(
             all_worker_stats, group_by=group_by, sort_by=sort_by)
-        return memory_information
 
     @staticmethod
     def _extract_view_data(views, data_keys):

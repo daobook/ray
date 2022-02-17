@@ -59,10 +59,9 @@ def list_rllib_tests(n: int = -1, test: str = None) -> Tuple[str, List[str]]:
         ])
 
         srcs = [f.strip() for f in src_out.splitlines()]
-        srcs = [
+        if srcs := [
             f for f in srcs if f.startswith("//python") and f.endswith(".py")
-        ]
-        if srcs:
+        ]:
             all_tests.append((t, srcs))
 
         # Break early if smoke test.
@@ -104,7 +103,7 @@ def _is_path_module(module: str, name: str, _base_dir: str) -> bool:
         return False
 
     bps = ["python"] + module.split(".")
-    path = os.path.join(_base_dir, os.path.join(*bps), name + ".py")
+    path = os.path.join(_base_dir, os.path.join(*bps), f'{name}.py')
     if os.path.isfile(path):
         return True  # file module
     return False
@@ -193,7 +192,7 @@ def _full_module_path(module, f) -> str:
 
     if not module:
         return fn
-    return module + "." + fn
+    return f'{module}.{fn}'
 
 
 def _should_skip(d: str) -> bool:
@@ -245,9 +244,7 @@ def _depends(graph: DepGraph, visited: Dict[int, bool], tid: int,
         if c in visited:
             continue
         visited[c] = True
-        # Reduce to a question of whether there is a path from c to qid.
-        ds = _depends(graph, visited, c, qid)
-        if ds:
+        if ds := _depends(graph, visited, c, qid):
             # From tid -> c -> qid.
             return [tid] + ds
     return []
@@ -283,8 +280,7 @@ def test_depends_on_file(graph: DepGraph, test: Tuple[str, Tuple[str]],
             # TODO(jungong): What tests are these?????
             continue
 
-        branch = _depends(graph, {}, graph.ids[tid], graph.ids[query])
-        if branch:
+        if branch := _depends(graph, {}, graph.ids[tid], graph.ids[query]):
             return branch
 
     # Does not depend on file.
@@ -373,8 +369,7 @@ if __name__ == "__main__":
         print("Total # of tests: ", len(tests))
 
         for t in tests:
-            branch = test_depends_on_file(graph, t, args.file)
-            if branch:
+            if branch := test_depends_on_file(graph, t, args.file):
                 print("{} depends on {}".format(t[0], args.file))
                 # Print some debugging info.
                 for n in branch:

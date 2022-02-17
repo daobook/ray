@@ -54,10 +54,7 @@ class ResourceSpec(
 
     def resolved(self):
         """Returns if this ResourceSpec has default values filled out."""
-        for v in self._asdict().values():
-            if v is None:
-                return False
-        return True
+        return all(v is not None for v in self._asdict().values())
 
     def to_resource_dict(self):
         """Returns a dict suitable to pass to raylet initialization.
@@ -169,7 +166,7 @@ class ResourceSpec(
             max_cap = ray_constants.DEFAULT_OBJECT_STORE_MAX_MEMORY_BYTES
             # Cap by shm size by default to avoid low performance, but don't
             # go lower than REQUIRE_SHM_SIZE_THRESHOLD.
-            if sys.platform == "linux" or sys.platform == "linux2":
+            if sys.platform in ["linux", "linux2"]:
                 shm_avail = ray._private.utils.get_shared_memory_bytes()
                 max_cap = min(
                     max(ray_constants.REQUIRE_SHM_SIZE_THRESHOLD, shm_avail),
@@ -265,8 +262,7 @@ gpu model type.
         if k.strip() == "Model":
             full_model_name = v.strip()
             break
-    pretty_name = _pretty_gpu_name(full_model_name)
-    if pretty_name:
+    if pretty_name := _pretty_gpu_name(full_model_name):
         constraint_name = (f"{ray_constants.RESOURCE_CONSTRAINT_PREFIX}"
                            f"{pretty_name}")
         return {constraint_name: 1}
@@ -288,8 +284,7 @@ def _get_gpu_info_string():
             gpu_dirs = os.listdir(proc_gpus_path)
             if len(gpu_dirs) > 0:
                 gpu_info_path = f"{proc_gpus_path}/{gpu_dirs[0]}/information"
-                info_str = open(gpu_info_path).read()
-                return info_str
+                return open(gpu_info_path).read()
     return None
 
 

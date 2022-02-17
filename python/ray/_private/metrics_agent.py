@@ -204,8 +204,7 @@ class PrometheusServiceDiscoveryWriter(threading.Thread):
         ]
         redis_client = services.create_redis_client(self.redis_address,
                                                     self.redis_password)
-        autoscaler_addr = redis_client.get("AutoscalerMetricsAddress")
-        if autoscaler_addr:
+        if autoscaler_addr := redis_client.get("AutoscalerMetricsAddress"):
             metrics_export_addresses.append(autoscaler_addr.decode("utf-8"))
         return json.dumps([{
             "labels": {

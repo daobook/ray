@@ -6,10 +6,7 @@ from ray.util.placement_group import placement_group, remove_placement_group
 import time
 import tqdm
 
-if "SMOKE_TEST" in os.environ:
-    MAX_PLACEMENT_GROUPS = 20
-else:
-    MAX_PLACEMENT_GROUPS = 1000
+MAX_PLACEMENT_GROUPS = 20 if "SMOKE_TEST" in os.environ else 1000
 
 
 def test_many_placement_groups():

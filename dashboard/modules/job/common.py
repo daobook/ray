@@ -74,10 +74,7 @@ class JobStatusStorageClient:
         pickled_status = _internal_kv_get(
             self.JOB_STATUS_KEY.format(job_id=job_id),
             namespace=ray_constants.KV_NAMESPACE_JOB)
-        if pickled_status is None:
-            return None
-        else:
-            return pickle.loads(pickled_status)
+        return None if pickled_status is None else pickle.loads(pickled_status)
 
 
 def uri_to_http_components(package_uri: str) -> Tuple[str, str]:
@@ -136,25 +133,23 @@ class JobSubmitRequest:
                 raise TypeError(
                     f"runtime_env must be a dict, got {type(self.runtime_env)}"
                 )
-            else:
-                for k in self.runtime_env.keys():
-                    if not isinstance(k, str):
-                        raise TypeError(
-                            f"runtime_env keys must be strings, got {type(k)}")
+            for k in self.runtime_env.keys():
+                if not isinstance(k, str):
+                    raise TypeError(
+                        f"runtime_env keys must be strings, got {type(k)}")
 
         if self.metadata is not None:
             if not isinstance(self.metadata, dict):
                 raise TypeError(
                     f"metadata must be a dict, got {type(self.metadata)}")
-            else:
-                for k in self.metadata.keys():
-                    if not isinstance(k, str):
-                        raise TypeError(
-                            f"metadata keys must be strings, got {type(k)}")
-                for v in self.metadata.values():
-                    if not isinstance(v, str):
-                        raise TypeError(
-                            f"metadata values must be strings, got {type(v)}")
+            for k in self.metadata.keys():
+                if not isinstance(k, str):
+                    raise TypeError(
+                        f"metadata keys must be strings, got {type(k)}")
+            for v in self.metadata.values():
+                if not isinstance(v, str):
+                    raise TypeError(
+                        f"metadata values must be strings, got {type(v)}")
 
 
 @dataclass

@@ -25,14 +25,19 @@ def parse_allocated_resource(allocated_instances_serialized_json):
                 if val > 0:
                     cpu_ids.append(idx)
                     cpu_shares += val
-            container_resource_args.append("--cpu-shares=" +
-                                           str(int(cpu_shares / 10000 * 1024)))
-            container_resource_args.append("--cpuset-cpus=" + ",".join(
-                str(e) for e in cpu_ids))
+            container_resource_args.extend(
+                (
+                    "--cpu-shares=" + str(int(cpu_shares / 10000 * 1024)),
+                    "--cpuset-cpus=" + ",".join(str(e) for e in cpu_ids),
+                )
+            )
+
         else:
             # cpushare
             container_resource_args.append(
-                "--cpu-shares=" + str(int(cpu_resource / 10000 * 1024)))
+                f'--cpu-shares={int(cpu_resource / 10000 * 1024)}'
+            )
+
     if "memory" in allocated_resource.keys():
         container_resource_args.append(
             "--memory=" + str(int(allocated_resource["memory"] / 10000)))
@@ -55,19 +60,22 @@ class ContainerManager:
 
         container_driver = "podman"
         container_command = [
-            container_driver, "run", "-v",
-            self._ray_tmp_dir + ":" + self._ray_tmp_dir,
-            "--cgroup-manager=cgroupfs", "--network=host", "--pid=host",
-            "--ipc=host", "--env-host"
+            container_driver,
+            'run',
+            '-v',
+            f'{self._ray_tmp_dir}:{self._ray_tmp_dir}',
+            '--cgroup-manager=cgroupfs',
+            '--network=host',
+            '--pid=host',
+            '--ipc=host',
+            '--env-host',
+            '--env',
+            ("RAY_RAYLET_PID=" + os.getenv("RAY_RAYLET_PID")),
         ]
-        container_command.append("--env")
-        container_command.append("RAY_RAYLET_PID=" +
-                                 os.getenv("RAY_RAYLET_PID"))
+
         if container_option.get("run_options"):
             container_command.extend(container_option.get("run_options"))
-        # TODO(chenk008): add resource limit
-        container_command.append("--entrypoint")
-        container_command.append("python")
+        container_command.extend(("--entrypoint", "python"))
         container_command.append(container_option.get("image"))
         context.py_executable = " ".join(container_command)
         logger.info("start worker in container with prefix: {}".format(

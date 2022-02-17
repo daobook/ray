@@ -39,11 +39,8 @@ def test_many_args():
 def test_many_returns():
     @ray.remote(num_returns=MAX_RETURNS)
     def f():
-        to_return = []
-        for _ in range(MAX_RETURNS):
-            obj = list(range(10000))
-            to_return.append(obj)
-
+        obj = list(range(10000))
+        to_return = [obj for _ in range(MAX_RETURNS)]
         return tuple(to_return)
 
     returned_refs = f.remote()

@@ -173,17 +173,14 @@ def test_kill_actor(ray_start_with_dashboard):
         actor_groups_resp = resp.json()
         assert actor_groups_resp["result"] is True, actor_groups_resp["msg"]
         actor_groups = actor_groups_resp["data"]["actorGroups"]
-        actor = actor_groups["Actor"]["entries"][0]
-        return actor
+        return actor_groups["Actor"]["entries"][0]
 
     def kill_actor_using_dashboard(actor):
-        resp = requests.get(
-            webui_url + "/logical/kill_actor",
-            params={
-                "actorId": actor["actorId"],
-                "ipAddress": actor["ipAddress"],
-                "port": actor["port"]
-            })
+        resp = requests.get(f'{webui_url}/logical/kill_actor', params={
+                    "actorId": actor["actorId"],
+                    "ipAddress": actor["ipAddress"],
+                    "port": actor["port"]
+                })
         resp.raise_for_status()
         resp_json = resp.json()
         assert resp_json["result"] is True, "msg" in resp_json
@@ -312,7 +309,7 @@ def test_nil_node(enable_test_module, disable_aiohttp_cache,
             resp_data = resp_json["data"]
             actors = resp_data["actors"]
             assert len(actors) == 1
-            response = requests.get(webui_url + "/test/dump?key=node_actors")
+            response = requests.get(f'{webui_url}/test/dump?key=node_actors')
             response.raise_for_status()
             result = response.json()
             assert actor_consts.NIL_NODE_ID not in result["data"]["nodeActors"]

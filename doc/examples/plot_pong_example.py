@@ -97,7 +97,7 @@ def process_rewards(r):
     """Compute discounted reward from a vector of rewards."""
     discounted_r = np.zeros_like(r)
     running_add = 0
-    for t in reversed(range(0, r.size)):
+    for t in reversed(range(r.size)):
         # Reset the sum, since this was a game boundary (pong specific!).
         if r[t] != 0:
             running_add = 0
@@ -281,7 +281,7 @@ for i in range(1, 1 + iterations):
     gradient_ids = [
         actor.compute_gradient.remote(model_id) for actor in actors
     ]
-    for batch in range(batch_size):
+    for _ in range(batch_size):
         [grad_id], gradient_ids = ray.wait(gradient_ids)
         grad, reward_sum = ray.get(grad_id)
         # Accumulate the gradient over batch.

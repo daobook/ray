@@ -61,12 +61,7 @@ if __name__ == "__main__":
         "Note that the command must be a string.")
     args = parser.parse_args()
 
-    if args.node:
-        # assert args.num_nodes == 1
-        node_info = "#SBATCH -w {}".format(args.node)
-    else:
-        node_info = ""
-
+    node_info = "#SBATCH -w {}".format(args.node) if args.node else ""
     job_name = "{}_{}".format(args.exp_name,
                               time.strftime("%m%d-%H%M", time.localtime()))
 

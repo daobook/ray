@@ -86,10 +86,12 @@ def test_node_physical_stats(enable_test_module, shutdown_only):
             assert len(node_physical_stats) == 1
             current_stats = node_physical_stats[addresses["node_id"]]
             # Check Actor workers
-            current_actor_pids = set()
-            for worker in current_stats["workers"]:
-                if "ray::Actor" in worker["cmdline"][0]:
-                    current_actor_pids.add(worker["pid"])
+            current_actor_pids = {
+                worker["pid"]
+                for worker in current_stats["workers"]
+                if "ray::Actor" in worker["cmdline"][0]
+            }
+
             assert current_actor_pids == actor_pids
             # Check raylet cmdline
             assert "raylet" in current_stats["cmdline"][0]
@@ -133,12 +135,15 @@ def test_prometheus_physical_stats_record(enable_test_module, shutdown_only):
             prom_addresses)
         raylet_proc = ray.worker._global_node.all_processes[
             ray_constants.PROCESS_TYPE_RAYLET][0]
-        raylet_pid = None
-        # Find the raylet pid recorded in the tag.
-        for sample in metric_samples:
-            if sample.name == "ray_raylet_cpu":
-                raylet_pid = sample.labels["pid"]
-                break
+        raylet_pid = next(
+            (
+                sample.labels["pid"]
+                for sample in metric_samples
+                if sample.name == "ray_raylet_cpu"
+            ),
+            None,
+        )
+
         return str(raylet_proc.process.pid) == str(raylet_pid)
 
     wait_for_condition(test_case_stats_exist, retry_interval_ms=1000)

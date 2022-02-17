@@ -61,14 +61,18 @@ def lambda_handler(event, context):
             source_tag = f"{source_image}-{pyversion}"
             destination_tag = f"{destination_image}-{pyversion}"
             for cudaversion in cuda_versions:
-                cuda_source_tag = source_tag + f"-{cudaversion}"
-                cuda_destination_tag = destination_tag + f"-{cudaversion}"
+                cuda_source_tag = f'{source_tag}-{cudaversion}'
+                cuda_destination_tag = f'{destination_tag}-{cudaversion}'
                 results.append(
                     retag(repo, cuda_source_tag, cuda_destination_tag))
-            results.append(retag(repo, source_tag, destination_tag))
-            results.append(retag(repo, source_tag, destination_tag + "-cpu"))
-            results.append(
-                retag(repo, source_tag + "-gpu", destination_tag + "-gpu"))
+            results.extend(
+                (
+                    retag(repo, source_tag, destination_tag),
+                    retag(repo, source_tag, f'{destination_tag}-cpu'),
+                    retag(repo, f'{source_tag}-gpu', f'{destination_tag}-gpu'),
+                )
+            )
+
         [print(i) for i in results]
         total_results.extend(results)
 
@@ -80,11 +84,14 @@ def lambda_handler(event, context):
             destination_tag = f"{destination_image}-{cudaversion}"
             results.append(retag(repo, source_tag, destination_tag))
 
-        # ray:nightly -> ray:1.x
-        results.append(retag(repo, source_image, destination_image))
-        results.append(retag(repo, source_image, destination_image + "-cpu"))
-        results.append(
-            retag(repo, source_image + "-gpu", destination_image + "-gpu"))
+        results.extend(
+            (
+                retag(repo, source_image, destination_image),
+                retag(repo, source_image, f'{destination_image}-cpu'),
+                retag(repo, f'{source_image}-gpu', f'{destination_image}-gpu'),
+            )
+        )
+
     [print(i) for i in results]
     total_results.extend(results)
 

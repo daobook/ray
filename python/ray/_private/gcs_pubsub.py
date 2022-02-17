@@ -53,9 +53,8 @@ class _SubscriberBase:
         cmd = pubsub_pb2.Command(
             channel_type=pubsub_pb2.RAY_ERROR_INFO_CHANNEL,
             subscribe_message={})
-        req = gcs_service_pb2.GcsSubscriberCommandBatchRequest(
+        return gcs_service_pb2.GcsSubscriberCommandBatchRequest(
             subscriber_id=self._subscriber_id, commands=[cmd])
-        return req
 
     def _poll_request(self):
         return gcs_service_pb2.GcsSubscriberPollRequest(

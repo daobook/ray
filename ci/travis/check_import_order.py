@@ -27,7 +27,7 @@ def check_import(file):
 
     with io.open(file, "r", encoding="utf-8") as f:
         for i, line in enumerate(f):
-            for check in check_to_lines.keys():
+            for check in check_to_lines:
                 # This regex will match the following case
                 # - the string itself: `import psutil`
                 # - white space/indentation + the string:`    import psutil`
@@ -37,8 +37,10 @@ def check_import(file):
                 # It will not match the following
                 # - submodule import: `import ray.constants as ray_constants`
                 # - submodule import: `from ray import xyz`
-                if re.search(r"^\s*" + check + r"(\s*|\s+# noqa F401.*)$",
-                             line) and check_to_lines[check] == -1:
+                if (
+                    re.search(f'^\\s*{check}(\\s*|\\s+# noqa F401.*)$', line)
+                    and check_to_lines[check] == -1
+                ):
                     check_to_lines[check] = i
 
     for import_lib in ["import psutil", "import setproctitle"]:

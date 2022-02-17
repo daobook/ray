@@ -28,9 +28,7 @@ def gha_get_self_url():
         slug = check["app"]["slug"]
         if slug == "github-actions":
             run_url = check["check_runs_url"]
-            html_url = (
-                requests.get(run_url).json()["check_runs"][0]["html_url"])
-            return html_url
+            return requests.get(run_url).json()["check_runs"][0]["html_url"]
 
     # Return a fallback url
     return "https://github.com/ray-project/ray/actions"

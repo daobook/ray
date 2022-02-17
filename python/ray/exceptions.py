@@ -27,14 +27,13 @@ class RayError(Exception):
     def from_bytes(b):
         ray_exception = RayException()
         ray_exception.ParseFromString(b)
-        if ray_exception.language == PYTHON:
-            try:
-                return pickle.loads(ray_exception.serialized_exception)
-            except Exception as e:
-                msg = "Failed to unpickle serialized exception"
-                raise RuntimeError(msg) from e
-        else:
+        if ray_exception.language != PYTHON:
             return CrossLanguageError(ray_exception)
+        try:
+            return pickle.loads(ray_exception.serialized_exception)
+        except Exception as e:
+            msg = "Failed to unpickle serialized exception"
+            raise RuntimeError(msg) from e
 
 
 class CrossLanguageError(RayError):
@@ -60,7 +59,7 @@ class TaskCancelledError(RayError):
     def __str__(self):
         if self.task_id is None:
             return "This task or its dependency was cancelled by"
-        return "Task: " + str(self.task_id) + " was cancelled"
+        return f'Task: {str(self.task_id)} was cancelled'
 
 
 class RayTaskError(RayError):
@@ -88,10 +87,7 @@ class RayTaskError(RayError):
         # a tuple with the type and the value of self.args.
         # https://stackoverflow.com/a/49715949/2213289
         self.args = (function_name, traceback_str, cause, proctitle, pid, ip)
-        if proctitle:
-            self.proctitle = proctitle
-        else:
-            self.proctitle = setproctitle.getproctitle()
+        self.proctitle = proctitle or setproctitle.getproctitle()
         self.pid = pid or os.getpid()
         self.ip = ip or ray.util.get_node_ip_address()
         self.function_name = function_name
@@ -158,10 +154,7 @@ class RayTaskError(RayError):
                                   f"{self.proctitle}"
                                   f"{colorama.Fore.RESET} "
                                   f"(pid={self.pid}, ip={self.ip}")
-                if self.actor_repr:
-                    traceback_line += f", repr={self.actor_repr})"
-                else:
-                    traceback_line += ")"
+                traceback_line += f", repr={self.actor_repr})" if self.actor_repr else ")"
                 code_from_internal_file = False
                 out.append(traceback_line)
             elif line.startswith("  File ") and ("ray/worker.py" in line

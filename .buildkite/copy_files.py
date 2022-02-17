@@ -16,12 +16,11 @@ def retry(f):
         for _ in range(5):
             resp = f()
             print("Getting Presigned URL, status_code", resp.status_code)
-            if resp.status_code >= 500:
-                print("errored, retrying...")
-                print(resp.text)
-                time.sleep(5)
-            else:
+            if resp.status_code < 500:
                 return resp
+            print("errored, retrying...")
+            print(resp.text)
+            time.sleep(5)
         if resp is None or resp.status_code >= 500:
             print("still errorred after many retries")
             sys.exit(1)
@@ -36,11 +35,10 @@ def perform_auth():
         aws_region="us-west-2",
         aws_service="execute-api",
     )
-    resp = requests.get(
+    return requests.get(
         "https://vop4ss7n22.execute-api.us-west-2.amazonaws.com/endpoint/",
         auth=auth,
         params={"job_id": os.environ["BUILDKITE_JOB_ID"]})
-    return resp
 
 
 def handle_docker_login(resp):
@@ -51,11 +49,11 @@ def handle_docker_login(resp):
 
 def gather_paths(dir_path) -> List[str]:
     assert os.path.exists(dir_path)
-    if os.path.isdir(dir_path):
-        paths = [os.path.join(dir_path, f) for f in os.listdir(dir_path)]
-    else:
-        paths = [dir_path]
-    return paths
+    return (
+        [os.path.join(dir_path, f) for f in os.listdir(dir_path)]
+        if os.path.isdir(dir_path)
+        else [dir_path]
+    )
 
 
 dest_resp_mapping = {

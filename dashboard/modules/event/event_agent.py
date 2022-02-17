@@ -39,11 +39,10 @@ class EventAgent(dashboard_utils.DashboardAgentModule):
         """
         while True:
             try:
-                # TODO: Use async version if performance is an issue
-                dashboard_rpc_address = internal_kv._internal_kv_get(
+                if dashboard_rpc_address := internal_kv._internal_kv_get(
                     dashboard_consts.REDIS_KEY_DASHBOARD_RPC,
-                    namespace=ray_constants.KV_NAMESPACE_DASHBOARD)
-                if dashboard_rpc_address:
+                    namespace=ray_constants.KV_NAMESPACE_DASHBOARD,
+                ):
                     logger.info("Report events to %s", dashboard_rpc_address)
                     options = (("grpc.enable_http_proxy", 0), )
                     channel = utils.init_grpc_channel(

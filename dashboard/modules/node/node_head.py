@@ -117,10 +117,9 @@ class NodeHead(dashboard_utils.DashboardHeadModule):
                 for node_id in alive_node_ids:
                     key = f"{dashboard_consts.DASHBOARD_AGENT_PORT_PREFIX}" \
                           f"{node_id}"
-                    # TODO: Use async version if performance is an issue
-                    agent_port = ray.experimental.internal_kv._internal_kv_get(
-                        key, namespace=ray_constants.KV_NAMESPACE_DASHBOARD)
-                    if agent_port:
+                    if agent_port := ray.experimental.internal_kv._internal_kv_get(
+                        key, namespace=ray_constants.KV_NAMESPACE_DASHBOARD
+                    ):
                         agents[node_id] = json.loads(agent_port)
                 for node_id in agents.keys() - set(alive_node_ids):
                     agents.pop(node_id, None)
@@ -152,10 +151,12 @@ class NodeHead(dashboard_utils.DashboardHeadModule):
                 clients=all_node_details,
             )
         elif view is not None and view.lower() == "hostNameList".lower():
-            alive_hostnames = set()
-            for node in DataSource.nodes.values():
-                if node["state"] == "ALIVE":
-                    alive_hostnames.add(node["nodeManagerHostname"])
+            alive_hostnames = {
+                node["nodeManagerHostname"]
+                for node in DataSource.nodes.values()
+                if node["state"] == "ALIVE"
+            }
+
             return dashboard_utils.rest_response(
                 success=True,
                 message="Node hostname list fetched.",
@@ -279,8 +280,7 @@ class NodeHead(dashboard_utils.DashboardHeadModule):
             error_data = gcs_utils.ErrorTableData.FromString(pubsub_msg.data)
             message = error_data.error_message
             message = re.sub(r"\x1b\[\d+m", "", message)
-            match = re.search(r"\(pid=(\d+), ip=(.*?)\)", message)
-            if match:
+            if match := re.search(r"\(pid=(\d+), ip=(.*?)\)", message):
                 pid = match.group(1)
                 ip = match.group(2)
                 errs_for_ip = dict(DataSource.ip_and_pid_to_errors.get(ip, {}))
